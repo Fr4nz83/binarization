@@ -7,6 +7,13 @@
 - cuBLAS
 
 
+
 **Compilation**
 
 The code can be compiled by simply executing make.
+
+
+
+**App execution**
+
+...
