@@ -3,17 +3,18 @@
 - GCC >= 9.3
 - CUDA >= 11.X
 - Boost
-- cuDNN
+- JPEG
+- ZLIB
 - cuBLAS
 
 
 
 **Compilation**
 
-The code can be compiled by simply executing make.
+The code can be compiled simply by creating some build directory, executing "cmake ..", and finally executing "make".
 
 
 
 **App execution**
 
-...
+"bmm" plus some arguments (TODO) ...
