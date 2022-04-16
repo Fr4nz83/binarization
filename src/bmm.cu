@@ -32,6 +32,12 @@ __global__ void mnist_mlp32(In32LayerParam* bin, Fc32LayerParam* fc1)
 {
     grid_group grid = this_grid();
     
+    //========= Initial convolution ============
+    // TODO...
+    
+    //========= Batch normalization ============
+    // TODO...
+    
     //========= Input ============
     In32Layer(bin);
     // In32LayerBatched(bin);
@@ -41,6 +47,9 @@ __global__ void mnist_mlp32(In32LayerParam* bin, Fc32LayerParam* fc1)
     Fc32Layer(fc1);
     // Fc32LayerBatched(fc1);
     grid.sync();
+    
+    //========= Output layer ============
+    // TODO...
 }
 
 
