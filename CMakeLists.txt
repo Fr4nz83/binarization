@@ -17,7 +17,11 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # Necessary in order to use dynamic parallelism.
+add_compile_definitions(CUB_CDP)
 
+
+# Make make verbose.
+# set(CMAKE_VERBOSE_MAKEFILE ON)
 
 
 if(NOT CMAKE_BUILD_TYPE)
