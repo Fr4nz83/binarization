@@ -256,7 +256,7 @@ __device__ __inline__ void Out32LayerBatched(Out32LayerParam* p)
  *  The first layer of a binarized CNN. The input image is not binarized
  *  to avoid lossing too much information, so essentially it is a BW layer.
  *  The input image has 3 channels (R,G,B) with normalized floating-point 
- *  values around 0 via preprocessing. 
+ *  values around 0 via preprocessing.
  *  
  *  @param In32Conv32LayerParam Parameter with FP32 input image and 3 channels.
  *  @return Void
@@ -264,53 +264,51 @@ __device__ __inline__ void Out32LayerBatched(Out32LayerParam* p)
 
 __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
 {
-    GET_LANEID;
+    GET_LANEID; // Recover the ID of each warp and set the "warpid" variable accordingly.
     extern __shared__ int Cs[];
     const int ots = CEIL(p->output_channels); //number of steps in K: output_channels
-    volatile float* Csub = (float*)&Cs[warpid*(p->output_channels)];
-    volatile unsigned* sfilter = (unsigned*)&Cs[32*(p->output_channels)]; 
-    for (int i=threadIdx.x; i<(p->filter_height)*(p->filter_width)* (p->input_channels)*ots; i+=32*32)
+    volatile float* Csub = (float*) &Cs[warpid * (p->output_channels)];
+    volatile unsigned* sfilter = (unsigned*) &Cs[32 * (p->output_channels)]; 
+    for (int i=threadIdx.x; i < (p->filter_height) * (p->filter_width) * (p->input_channels) *ots; i += 32*32)
         sfilter[i] = p->filter_gpu[i];
     __syncthreads();
-    for (int bid = blockIdx.x*32+warpid; bid < (p->output_height) * (p->output_width) 
+    
+    
+    for (int bid = blockIdx.x * 32 + warpid; bid < (p->output_height) * (p->output_width) 
             * (p->batch); bid += gridDim.x*32)
     {
         const int bz = bid / (p->output_width * p->output_height); //over N:batch
         const int by = (bid % (p->output_width * p->output_height)) / (p->output_width);//over P:out_height
         const int bx = (bid % (p->output_width * p->output_height)) % (p->output_width);//over Q:out_width 
+        
         //coord (ax,ay) in Input from bx,by in Output
         const int ax0 = bx*(p->stride_horizontal)-(p->pad_w);
         const int ay0 = by*(p->stride_vertical)-(p->pad_h);
         for (int i=laneid; i<(p->output_channels); i+=32) Csub[i] = 0; 
-        //load a window of data from Input
+        
+        // load a window of data from Input
         for (int r=0; r<(p->filter_height); r++)
         {
-            const int ay = ay0 + r; //y-coord in Input
+            const int ay = ay0 + r; // y-coord in Input
             if ( (ay>=0) && (ay<(p->input_height)) )
             {
                 for (int s=0; s<(p->filter_width); s++)
                 {
-                    const int ax = ax0 + s; //x-coord in Input
-                    //within Input frame
+                    const int ax = ax0 + s; // x-coord in Input
+                    // Within Input frame
                     if ( (ax>=0) && (ax<(p->input_width)) )
                     {
-                        float f0 = p->input_gpu[(bz*3+0)*(p->input_height)*(p->input_width)
-                            +ay*(p->input_width)+ax];//R
-                        float f1 = p->input_gpu[(bz*3+1)*(p->input_height)*(p->input_width)
-                            +ay*(p->input_width)+ax];//G
-                        float f2 = p->input_gpu[(bz*3+2)*(p->input_height)*(p->input_width)
-                            +ay*(p->input_width)+ax];//B
+                        float f0 = p->input_gpu[(bz*3+0)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; //R
+                        float f1 = p->input_gpu[(bz*3+1)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; //G
+                        float f2 = p->input_gpu[(bz*3+2)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax];//B
 
                         for (int k=0; k<ots; k++)
                         {
-                            unsigned l0 = sfilter[(r*(p->filter_width)+s)
-                                *(p->input_channels)*ots + 0*ots+k];
-                            unsigned l1 = sfilter[(r*(p->filter_width)+s)
-                                *(p->input_channels)*ots + 1*ots+k];
-                            unsigned l2 = sfilter[(r*(p->filter_width)+s)
-                                *(p->input_channels)*ots + 2*ots+k];
+                            unsigned l0 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 0*ots+k];
+                            unsigned l1 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 1*ots+k];
+                            unsigned l2 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 2*ots+k];
 
-                            Csub[32*k+laneid] += (((l0>>(31-laneid))&0x1)?f0:-f0)
+                            Csub[32*k+laneid] += (((l0 >> (31-laneid)) & 0x1) ? f0 : -f0)
                                 + (((l1>>(31-laneid))&0x1)?f1:-f1)
                                 + (((l2>>(31-laneid))&0x1)?f2:-f2);
                         }
@@ -318,17 +316,20 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
                 }
             }
         }
+        
+        
         for (int k=0; k<ots; k++)
         {
             // save shape[batch, output_height, output_width, out_channels/32]
             bool bin = (Csub[k*32+laneid])<(p->bn_gpu)[k*32+laneid]?0:1;
             unsigned C = __brev(__ballot_sync(0xFFFFFFFF,bin));
-            //If FC layer follows, store in column-major
+            
+            // If FC layer follows, store in column-major
             if (p->output_transpose)
             {
                 p->output_gpu[(((by*p->output_width)+bx)*ots+k)*FEIL(p->batch)+bz] = C;
             }
-            //Otherwise, store in row-major
+            // Otherwise, store in row-major
             else
             {
                 p->output_gpu[(bz*(p->output_height)*(p->output_width)*ots) //N
@@ -346,6 +347,7 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
         }
     }
 }
+
 
 /** @brief CNN input layer with 2x2 max pooling and without input binarization.
  *
