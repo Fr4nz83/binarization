@@ -14,80 +14,42 @@
 #include <chrono>
 
 #include <cooperative_groups.h>
-#include <cub/cub.cuh>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
 #include "utility.h"
 #include "sbnn32_param.h"
-#include "sbnn64_param.h"
 #include "sbnn32.cuh"
-#include "sbnn64.cuh"
 #include "data.h"
+
+#include "binarization.cuh"
 
 #include "cnpy.h"
 #include "generator.h"
 
 
-using namespace cooperative_groups;
-using namespace std;
 
-
-// Nuovo modello per le NN...
-__global__ void test(float* src, float* dest, int N)
-{   
-    grid_group grid = this_grid();
-    thread_block tb = this_thread_block();
-    
-    const int num_blocks = grid.num_blocks();
-    const int num_threads = grid.num_threads();
-    const int tid = grid.thread_rank();
-    const int tid_block = tb.thread_rank();
-    
-    if(tid == 0) printf("Num blocks: %d\n", num_blocks);
-    if(tid == 0) printf("Num threads: %d\n", num_threads);
-    
-    if(tid == 0) dest[0] = 0;
-    grid.sync();
-    
-    
-    float val = 0;
-    for(int i = tid; i < N; i += num_threads) val += src[i];
-    tb.sync();
-    
-    
-    // Perform sum-reduction.
-    typedef cub::BlockReduce<int, 1024> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage temp_storage;
-    float aggregate = BlockReduce(temp_storage).Sum(val);
-    
-    
-    if(tid_block == 0) atomicAdd(dest, aggregate);
-}
-
-
-using namespace cnpy;
-
-
-
+// *** FORWARD DECLARATIONS *** //
 int main_new();
 
 
 
+// *** MAIN *** //
+
 int main()
 {
 	return main_new();
-	// return main_old();
 }
-
-
 
 
 int main_new()
 {
+    using namespace cooperative_groups;
+    
+    
     cout << "Using BTSC-32\n";
 
-    //=============== Configuration =================
+    //=============== Device Configuration =================
     int dev = 0;
     cudaSetDevice(dev);
 
@@ -109,88 +71,79 @@ int main_new()
     
     
 
-    //================ Setup Kernel =================
-    int numThreads = 1024;
+    //================ Setup parameters Kernels =================
+    constexpr int numThreads = 1024;
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
     int numBlocksPerSm;
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, test, numThreads, 0);
-    cout << "Number blocks per SM: " << numBlocksPerSm << std::endl;
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, calc_stats, numThreads, 0);
+    cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
     
     
-    int N = 1000000;
-    thrust::host_vector<float> t_h(N, 1);
-    thrust::device_vector<float> t_d(t_h); float *t_d_ptr = thrust::raw_pointer_cast(t_d.data());
-    thrust::device_vector<float> d_res(1, 1); float *d_res_ptr = thrust::raw_pointer_cast(d_res.data());
-    std::cout << "Risultato PRE: " << d_res[0] << std::endl;
-	 
-	 
-   
+    constexpr int N = 1000000;
+    std::vector<float> t_h(N, 1);
     
     
-    void* args[] = {&t_d_ptr, &d_res_ptr, &N};
-    cudaEvent_t start, end_load, end_ops;
-    cudaEventCreate(&start);
-    cudaEventCreate(&end_load);
-    cudaEventCreate(&end_ops);
+    ImgInLayer32 in_layer(t_h);
+    
+    
+    cudaEvent_t start, end_load, end_ops; 
+    cudaEventCreate(&start); cudaEventCreate(&end_load); cudaEventCreate(&end_ops);
     double tot_time = 0, tot_time_comp = 0;
-    uint32_t rounds = 1;
+    constexpr uint32_t rounds = 1;
     for(uint32_t r = 0; r < rounds; r++)
     {
-    	    //std::cout << "Round " << r << std::endl;
+    	    std::cout << "Round " << r << std::endl;
     
             float ms_init = 0;
     	    float ms_comp = 0;
     
+    
+    	    // 1 - Transfer INPUT data from host to GPU...
+	    cudaEventRecord(start);
+	    ImgInLayer32 *in_layer_gpu = in_layer.initialize();
+	    void* args[] = {&in_layer_gpu};
 	    
+	    
+	    
+	    // 2 - Compute some statistics concerning the input data.
 	    cudaEventRecord(end_load);
-	    cudaLaunchCooperativeKernel((void*) test, 
+	    cudaLaunchCooperativeKernel((void*) calc_stats, 
 	    				numBlocksPerSm * deviceProp.multiProcessorCount, 
 	    				numThreads, 
 	    				args);
 	    cudaEventRecord(end_ops);
 	    
 	    
-	    std::cout << "Risultato POST: " << d_res[0] << std::endl;
-	    exit(1);
-	    
-	    
+	    // DEBUG.
+	    std::cout << "Risultato mean: " << in_layer.get_mean() << std::endl;
+	    std::cout << "Risultato variance: " << in_layer.get_variance() << std::endl;
 	    // float* res = bfc1->download_full_output();
 	    // free(res);
+	    
+	    
+	    
+	    // 3 - Execute the NN forward pass.
+	    // TODO.
+	    
 	    
 	    
 	    cudaEventSynchronize(end_ops);
 	    cudaEventElapsedTime(&ms_init, start, end_load);
     	    cudaEventElapsedTime(&ms_comp, end_load, end_ops);
     
-            /*printf("\n============================\n");
+            printf("\n============================\n");
             printf("Round: %d\n", r);
-            printf("Init time: %.6f ms.\n", ms_init);
-            printf("Comp time: %.6f ms.\n", ms_comp);
+            printf("Load data time: %.6f ms.\n", ms_init);
+            printf("Computation time: %.6f ms.\n", ms_comp);
             printf("Tot time: %.6f ms.\n", ms_init + ms_comp);
-            printf("============================\n");*/
+            printf("============================\n");
             
             tot_time += ms_init + ms_comp;
             tot_time_comp += ms_comp;
-
-
-	    //================ Output =================   
-	    
-	    // DEBUG: stampa risultati primo layer.
-	    /*printf("\n============================\n");
-	    printf("Print results\n");
-	    float* res = bfc1->download_full_output();
-	    for(uint32_t i = 0; i < batch; i++)
-	    {
-	    	cout << i << ": ";
-	    	for(uint32_t j = 0; j < n_hidden; j++)
-	    	{
-	    		cout << res[i * n_hidden + j] << " ";
-		}
-		cout << endl;
-	    }
-	    printf("============================\n");*/
     }
+    
+    
     
     std::cout << "Average time load input + computation over " << rounds << " rounds: " << tot_time / rounds << " ms." << std::endl;
     // std::cout << "Average time load input + computation per element in the batch (tot: " << batch << ") over " << rounds << " rounds: " << tot_time * 1000 / rounds / batch << " us." << std::endl;
@@ -199,9 +152,10 @@ int main_new()
     std::cerr << tot_time_comp / rounds;
 
 
-    //================ Release =================
-    // delete bin;
-    // delete bfc1;
+
+    //================ Release resources =================
+    // TODO ...
+    
 
     return 0;
 }
