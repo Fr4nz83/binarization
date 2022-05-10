@@ -80,8 +80,8 @@ int main_new()
     cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
     
     
-    constexpr int N = 1000000;
-    std::vector<float> t_h(N, 1);
+    constexpr int N = 10000000;
+    std::vector<float> t_h = gen_matrix(1, N, -2., 2.);
     
     
     ImgInLayer32 in_layer(t_h);

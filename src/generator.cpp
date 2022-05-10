@@ -3,11 +3,11 @@
 #include <stdio.h>
 
 
-std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
+std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols, const float& lb, const float& ub)
 {
 	std::random_device rd;  //Will be used to obtain a seed for the random number engine
 	std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
-	std::uniform_real_distribution<> float_dist(-5, 5);
+	std::uniform_real_distribution<> float_dist(lb, ub);
 	    
 	std::vector<float> vec(rows * cols);
 	for (auto& el : vec) el = (float) float_dist(gen);
@@ -15,9 +15,9 @@ std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
 	return vec;
 }
 
-std::vector<float> gen_matrix(const uint32_t& batch, const uint32_t& rows, const uint32_t& cols)
+std::vector<float> gen_matrix(const uint32_t& batch, const uint32_t& rows, const uint32_t& cols, const float& lb, const float& ub)
 {   
-    	return gen_matrix(batch * rows, cols);
+    	return gen_matrix(batch * rows, cols, lb, ub);
 }
 
 void write_array(const std::vector<float>& vec, const char* namefile)
