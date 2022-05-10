@@ -21,6 +21,7 @@
 #include "sbnn32_param.h"
 #include "sbnn32.cuh"
 #include "data.h"
+#include "dataset_reader.h"
 
 #include "binarization.cuh"
 
@@ -80,8 +81,9 @@ int main_new()
     cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
     
     
-    constexpr int N = 100000000;
+    constexpr int N = 1000000;
     std::vector<float> t_h = gen_matrix(1, N, -2., 2.);
+    auto set_images = ImgDatasetReader<32,32>::read_dataset_cifar10("data_batch_1.bin");
     
     
     ImgInLayer32 in_layer(t_h);
