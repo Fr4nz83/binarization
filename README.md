@@ -11,10 +11,10 @@
 
 **Compilation**
 
-The code can be compiled simply by creating some build directory, executing "cmake ..", and finally executing "make".
+The code can be compiled simply by creating some build directory, then executing "cmake ..", and finally executing "make".
 
 
 
 **App execution**
 
-"bmm" plus some arguments (TODO) ...
+"bin" plus some arguments (TODO) ...
