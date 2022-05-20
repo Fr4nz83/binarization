@@ -83,7 +83,18 @@ int main_new()
     
     constexpr int N = 1000000;
     std::vector<float> t_h = gen_matrix(1, N, -2., 2.);
-    auto set_images = ImgDatasetReader<32,32>::read_dataset_cifar10("data_batch_1.bin");
+    
+    constexpr uint32_t image_height = 32, image_width = 32, image_channel = 3;
+    std::string cifar10_dir = "../dataset/data_batch_1.bin";
+    // auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10(cifar10_dir);
+    auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
+    
+    std::cout << "Number of images: " << set_images.size() << std::endl;
+    const uint32_t batch = set_images.size();
+    uint32_t *images_test = (uint32_t*) malloc(batch * image_height * image_width * sizeof(uint32_t));
+    uint32_t *image_labels_test = (uint32_t*) malloc(batch * sizeof(uint32_t));
+    read_CIFAR10_raw(cifar10_dir, images_test, image_labels_test, batch);
+    exit(1);
     
     
     ImgInLayer32 in_layer(t_h);

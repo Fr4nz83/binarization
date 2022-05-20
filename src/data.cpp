@@ -237,7 +237,7 @@ void read_CIFAR10_raw(string filename, unsigned* images, unsigned* labels, const
                     for (int w=0; w<image_width; w++)
                     {
                         file.read((char*) &temp, sizeof(temp));
-                        ui[(l*image_height*image_width+h*image_width+w)*4+c] = temp;
+                        ui[(l*image_height*image_width + h*image_width + w) * 4 + c] = temp;
                     }
         }
     }

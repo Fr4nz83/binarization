@@ -19,14 +19,16 @@ typedef unsigned char uchar;
 //================ Macro Definition ===============
 #define BITWIDTH 32
 #define LOG_BITWIDTH 5
-#define CEIL(X) (((X)+BITWIDTH-1)>>LOG_BITWIDTH)
-#define FEIL(X) ((((X)+BITWIDTH-1)>>LOG_BITWIDTH)<<LOG_BITWIDTH)
+#define CEIL(X) (((X) + BITWIDTH - 1) >> LOG_BITWIDTH) // Equivalente a ceil(X/32)
+#define FEIL(X) ((((X) + BITWIDTH - 1) >> LOG_BITWIDTH) << LOG_BITWIDTH) // Equivalente a ceil(X/32)*32 (ovvero, il multiplo di 32 >= X)
 
 #define BITWIDTH64 64
 #define LOG_BITWIDTH64 6
 #define CEIL64(X) (((X)+BITWIDTH64-1)>>LOG_BITWIDTH64)
 #define FEIL64(X) ((((X)+BITWIDTH64-1)>>LOG_BITWIDTH64)<<LOG_BITWIDTH64)
 
+// Recupera l'ID di un thread all'interno del proprio warp (laneid) e l'ID di un warp all'interno di una griglia.
+// NOTA: e' meglio calcolare questi ID con le classiche variabili threadIdx.x, blockIdx.x, etc.
 #define GET_LANEID unsigned laneid; asm("mov.u32 %0, %%laneid;":"=r"(laneid)); \
     unsigned warpid; asm("mov.u32 %0, %%warpid;":"=r"(warpid)); 
 

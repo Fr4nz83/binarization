@@ -47,6 +47,7 @@ struct cifar_image_float
 	cifar_image_float(const cifar_image<H, W>& obj)
 	{
 		this->label = obj.label;
+		#pragma unroll
 		for(uint32_t i = 0; i < H*W; i++)
 		{
 			this->R[i] = obj.R[i];
@@ -59,6 +60,7 @@ struct cifar_image_float
 	cifar_image_float& operator=(const cifar_image<H, W>& obj)
 	{
 		this->label = obj.label;
+		#pragma unroll
 		for(uint32_t i = 0; i < H*W; i++)
 		{
 			this->R[i] = obj.R[i];
@@ -98,7 +100,9 @@ public:
 
 	// *** PUBLIC TYPEDEFS *** //
 	
-	static std::vector<cif_img_float_t> read_dataset_cifar10(const std::string& filename);
+	static std::vector<cif_img_t> read_dataset_cifar10(const std::string& filename);
+	static std::vector<cif_img_float_t> read_dataset_cifar10_float(const std::string& filename);
+	static uint32_t* transform_dataset_nhwc(const std::vector<cif_img_t>& dataset);
 };
 
 
