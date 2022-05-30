@@ -26,7 +26,6 @@
 #include "binarization.cuh"
 
 #include "cnpy.h"
-#include "generator.h"
 
 
 
@@ -90,18 +89,6 @@ int main_new()
     uint32_t *images_test = (uint32_t*) malloc(batch * image_height * image_width * sizeof(uint32_t));
     uint32_t *image_labels_test = (uint32_t*) malloc(batch * sizeof(uint32_t));
     read_CIFAR10_raw(cifar10_dir, images_test, image_labels_test, batch);
-
-    uint32_t id_img = 9999;
-    uint32_t h = 31;
-    uint32_t w = 31;
-    uint32_t c = 1;
-    uint8_t *ptr_img = (uint8_t*) images_test;
-
-    uint32_t val = ptr_img[(id_img * image_height * image_width + h * image_width + w) * 4 + c];
-
-    std::cout << "Val1: " << val << std::endl;
-    std::cout << "Val2: " << set_images[id_img].G[h * image_width + w] << std::endl;
-
 
 
     // TODO: verificare che il contenuto delle due letture sia uguale.

@@ -56,6 +56,59 @@ std::vector<typename ImgDatasetReader<H,W>::cif_img_float_t> ImgDatasetReader<H,
 template <int H, int W>
 uint32_t* ImgDatasetReader<H,W>::transform_dataset_nhwc(const std::vector<cif_img_t>& dataset)
 {
-	uint32_t *arr = new uint32_t[dataset.size() * H * W];
+	uint32_t num_images = dataset.size();
+	uint32_t *arr = new uint32_t[num_images * H * W];
+
+	uint8_t* ptr_img = (uint8_t*) arr;
+	for(uint32_t i = 0; i < num_images; i++)
+	{
+		#pragma unroll
+		for(uint32_t h = 0; h < H; h++)
+		{
+			#pragma unroll
+			for(uint32_t w = 0; w < W; w++)
+			{
+				ptr_img[(i * H * W + h * W + w) * 4 + 0] = dataset[i].R[h * W + w];
+				ptr_img[(i * H * W + h * W + w) * 4 + 1] = dataset[i].G[h * W + w];
+				ptr_img[(i * H * W + h * W + w) * 4 + 2] = dataset[i].B[h * W + w];
+			}
+		}
+	}
+
+	return(arr);
+}
+
+template <int H, int W>
+float* ImgDatasetReader<H,W>::transform_dataset_nhwc_float(const std::vector<cif_img_float_t>& dataset)
+{
+	constexpr uint32_t num_channels = 3;
+	uint32_t num_images = dataset.size();
+	float *arr = new float[num_images * H * W * num_channels];
+
+	for(uint32_t i = 0; i < num_images; i++)
+	{
+		const uint32_t offset_img = i * H * W * num_channels;
+
+		#pragma unroll
+		for(uint32_t c = 0; c < num_channels; c++)
+		{
+			const uint32_t offset_color = H * W * c;
+
+			const float *ptr_val = dataset[i].R;
+			if(c == 1) ptr_val = dataset[i].G;
+			if(c == 2) ptr_val = dataset[i].B;
+
+			#pragma unroll
+			for(uint32_t h = 0; h < H; h++)
+			{
+				const uint32_t offset_height = h * W;
+
+				#pragma unroll
+				for(uint32_t w = 0; w < W; w++)
+					arr[offset_img + offset_color + offset_height + w] = ptr_val[offset_height + w];
+			}
+		}
+	}
+
 	return(arr);
 }
