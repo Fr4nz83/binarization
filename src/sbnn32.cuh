@@ -284,6 +284,7 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
         //coord (ax,ay) in Input from bx,by in Output
         const int ax0 = bx*(p->stride_horizontal)-(p->pad_w);
         const int ay0 = by*(p->stride_vertical)-(p->pad_h);
+
         for (int i=laneid; i<(p->output_channels); i+=32) Csub[i] = 0; 
         
         // load a window of data from Input
@@ -369,12 +370,15 @@ __device__ __inline__ void In32ConvPool32Layer(In32Conv32LayerParam* p)
     for (int i=threadIdx.x; i<(p->filter_height)*(p->filter_width)*(p->input_channels)*ots; i+=32*32)
         sfilter[i] = p->filter_gpu[i];
     __syncthreads();
+
+
     for (int bid = blockIdx.x*32+warpid; bid < 4*(p->output_height)*(p->output_width) 
             * (p->batch); bid += gridDim.x*32)
     {
         const int bz = bid/(4*p->output_width*p->output_height); //N:batch
         const int by = (bid%(4*p->output_width*p->output_height))/(2*p->output_width);//P:out_height
         const int bx = (bid%(4*p->output_width*p->output_height))%(2*p->output_width);//Q:out_width 
+
         //coord (ax,ay) in Input from bx,by in Output
         const int ax0 = bx*(p->stride_horizontal)-(p->pad_w);
         const int ay0 = by*(p->stride_vertical)-(p->pad_h);

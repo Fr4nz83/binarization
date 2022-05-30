@@ -79,25 +79,38 @@ int main_new()
     int numBlocksPerSm;
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, calc_stats, numThreads, 0);
     cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
-    
-    
-    constexpr int N = 1000000;
-    std::vector<float> t_h = gen_matrix(1, N, -2., 2.);
+
     
     constexpr uint32_t image_height = 32, image_width = 32, image_channel = 3;
     std::string cifar10_dir = "../dataset/data_batch_1.bin";
-    // auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10(cifar10_dir);
     auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
-    
     std::cout << "Number of images: " << set_images.size() << std::endl;
+    
     const uint32_t batch = set_images.size();
     uint32_t *images_test = (uint32_t*) malloc(batch * image_height * image_width * sizeof(uint32_t));
     uint32_t *image_labels_test = (uint32_t*) malloc(batch * sizeof(uint32_t));
     read_CIFAR10_raw(cifar10_dir, images_test, image_labels_test, batch);
+
+    uint32_t id_img = 9999;
+    uint32_t h = 31;
+    uint32_t w = 31;
+    uint32_t c = 1;
+    uint8_t *ptr_img = (uint8_t*) images_test;
+
+    uint32_t val = ptr_img[(id_img * image_height * image_width + h * image_width + w) * 4 + c];
+
+    std::cout << "Val1: " << val << std::endl;
+    std::cout << "Val2: " << set_images[id_img].G[h * image_width + w] << std::endl;
+
+
+
+    // TODO: verificare che il contenuto delle due letture sia uguale.
     exit(1);
     
-    
-    ImgInLayer32 in_layer(t_h);
+    // TODO: non appena si capisce con quale formato vengono passati i dati al layer Input della convoluzione, adattare la classe
+    //       ImgInLayer32 in maniera tale che prenda i dati nello stesso formato.
+    std::vector<float> tst;
+    ImgInLayer32 in_layer(tst);
     
     
     cudaEvent_t start, end_load, end_ops; 

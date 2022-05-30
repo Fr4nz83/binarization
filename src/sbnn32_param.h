@@ -897,17 +897,20 @@ class In32Conv32LayerParam
         ~In32Conv32LayerParam() { release(); }
 
     public:
+
         //Input
         float* input;
         float* input_gpu;
         unsigned input_width;
         unsigned input_height;
         unsigned input_channels;
+
         //Weight
         float* filter;
         unsigned* filter_gpu;
         unsigned filter_width;
         unsigned filter_height;
+
         //Output
         unsigned* output;
         unsigned* output_gpu;
@@ -915,27 +918,31 @@ class In32Conv32LayerParam
         unsigned output_height;
         unsigned output_channels;
         bool output_transpose;
+
         //Batch normalization
         float* bn;
         float* bn_gpu;
+
         //Others
         unsigned batch;
         unsigned stride_vertical;
         unsigned stride_horizontal;
         unsigned pad_h;
         unsigned pad_w;
+
         //Pooling
         unsigned pool_width;
         unsigned pool_height;
         unsigned buf_width;
         unsigned buf_height;
+
         //GPU shadow
         In32Conv32LayerParam* gpu;
         char name[8];
+
         //Residual
         bool save_residual;
         int* save_residual_gpu;
-
 };
 
 class Conv32LayerParam
