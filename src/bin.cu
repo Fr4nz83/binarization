@@ -58,10 +58,17 @@ int main_new()
     //================ Set Network =================
     
     // *** Input Layer ***
-    // NOTA: questo layer si aspetta una matrice di input in formato row-major con #righe == #docs e #colonne == #features.
-    //cout << "Initializing the input layer..." << std::endl;
-    //In32LayerParam* bin = new In32LayerParam("Fin", batch, n_feats);
-    //In32LayerParam* bin_gpu = bin->initialize(images);
+    constexpr uint32_t image_height = 32, image_width = 32, image_channel = 3, test_batch = 10000;
+    In32Conv32LayerParam* bconv1 = new In32Conv32LayerParam("Conv1",
+    														image_height, image_width, // Image size
+                											3, 3,     // Filter size
+															3, 128,   // # input channels and # output channels
+															test_batch, // Batch size
+															1,1, // Stride offsets
+															true, // same padding flag
+															0,0,      // Pooling size
+															false,	  // Transpose flag
+															true);    //save residual flag
     
     // *** Fc1 Layer ***
     // NOTA: questo layer si aspetta una matrice dei pesi in formato row-major con #righe == #features e #colonne == #hidden_units. 
@@ -80,7 +87,6 @@ int main_new()
     cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
 
     
-    constexpr uint32_t image_height = 32, image_width = 32, image_channel = 3;
     std::string cifar10_dir = "../dataset/data_batch_1.bin";
     auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
     std::cout << "Number of images: " << set_images.size() << std::endl;

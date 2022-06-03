@@ -266,24 +266,36 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
 {
     GET_LANEID; // Recover the ID of each warp and set the "warpid" variable accordingly.
     extern __shared__ int Cs[];
-    const int ots = CEIL(p->output_channels); //number of steps in K: output_channels
+
+    // equal to ceil(output_channels/32) => number of steps in K: output_channels
+    const int ots = CEIL(p->output_channels);
+
+
+    // Region of shared memory used by the 32 warps within a block to store their results.
     volatile float* Csub = (float*) &Cs[warpid * (p->output_channels)];
+    // Region of shared memory located beyond the above one used to store the filter values (see below).
     volatile unsigned* sfilter = (unsigned*) &Cs[32 * (p->output_channels)]; 
+
+
+    // Qui si assume che i valori nei filtri siano stati gia' binarizzati ed impacchettati in parole da 32 bit.
+    // Da cio' il meccanismo di lettura da global a shared memory.
     for (int i=threadIdx.x; i < (p->filter_height) * (p->filter_width) * (p->input_channels) *ots; i += 32*32)
         sfilter[i] = p->filter_gpu[i];
     __syncthreads();
     
-    
-    for (int bid = blockIdx.x * 32 + warpid; bid < (p->output_height) * (p->output_width) 
-            * (p->batch); bid += gridDim.x*32)
+
+    // Premesse: abbiamo 1024 thread per blocco (ergo, 32 warp). Inoltre, abbiamo "batch" immagini, ognuna avente dimensione H x W.
+    // Il loop sotto, pertanto, assegna durante un ciclo ad ogni warp un qualche elemento di output.
+    // Ogni elemento di output racchiude
+    for (int bid = blockIdx.x * 32 + warpid; bid < (p->output_height) * (p->output_width) * (p->batch); bid += gridDim.x * 32)
     {
-        const int bz = bid / (p->output_width * p->output_height); //over N:batch
-        const int by = (bid % (p->output_width * p->output_height)) / (p->output_width);//over P:out_height
-        const int bx = (bid % (p->output_width * p->output_height)) % (p->output_width);//over Q:out_width 
+        const int bz = bid / (p->output_width * p->output_height); // Recupera l'ID dell'immagine assegnato al warp.
+        const int by = (bid % (p->output_width * p->output_height)) / (p->output_width); // Recupera la riga dell'output assegnato al warp.
+        const int bx = (bid % (p->output_width * p->output_height)) % (p->output_width); // Recupera la colonna dell'output assegnata al warp.
         
-        //coord (ax,ay) in Input from bx,by in Output
-        const int ax0 = bx*(p->stride_horizontal)-(p->pad_w);
-        const int ay0 = by*(p->stride_vertical)-(p->pad_h);
+        // Coord (ax,ay) in Input from bx,by in Output
+        const int ax0 = bx * (p->stride_horizontal) - (p->pad_w);
+        const int ay0 = by * (p->stride_vertical) - (p->pad_h);
 
         for (int i=laneid; i<(p->output_channels); i+=32) Csub[i] = 0; 
         

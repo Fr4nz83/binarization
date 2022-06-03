@@ -690,34 +690,46 @@ class In32Conv32LayerParam
             this->pool_width = pool_width;
             this->output_transpose = output_transpose;
             this->save_residual = save_residual;
-            this->pad_h = same_padding?((( (input_height+stride_vertical-(input_height%stride_vertical))
-                            /stride_vertical-1)*stride_vertical+filter_height-input_height)>>1):0;
-            this->pad_w = same_padding?((( (input_width+stride_horizontal-(input_width%stride_horizontal))
-                                /stride_horizontal-1)*stride_horizontal+filter_width-input_width)>>1):0; 
+
+
+            // Se richiesto, calcola il padding necessario per l'opzione SAME padding.
+            this->pad_h = same_padding ?
+									   (( ((input_height + stride_vertical - (input_height % stride_vertical)) / stride_vertical - 1) *
+									    stride_vertical + filter_height - input_height) >> 1)
+									   : 0;
+            this->pad_w = same_padding ? ((((input_width+stride_horizontal-(input_width%stride_horizontal))
+                                            / stride_horizontal - 1) * stride_horizontal + filter_width - input_width) >> 1)
+            						   : 0;
+
+
             if (pool_height == 0)
             {
-                output_height = same_padding?(input_height+stride_vertical-1)/stride_vertical
-                    :((input_height-filter_height)/stride_vertical+1);
+                output_height = same_padding ? (input_height+stride_vertical-1)/stride_vertical
+                							 : ((input_height-filter_height)/stride_vertical+1);
                 this->buf_height = 0;
             }
             else
             {
-                buf_height = same_padding?(input_height+stride_vertical-1)/stride_vertical
-                    :((input_height-filter_height)/stride_vertical+1);
-                output_height = (buf_height+pool_height-1)/pool_height;//pooling height
+                buf_height = same_padding ? (input_height+stride_vertical-1)/stride_vertical
+                						 : ((input_height-filter_height)/stride_vertical+1);
+                output_height = (buf_height+pool_height-1)/pool_height; // pooling height
             }
             if (pool_width == 0)
             {
-                output_width = same_padding?(input_width+stride_horizontal-1)/stride_horizontal
-                    :((input_width-filter_width)/stride_horizontal+1);
+                output_width = same_padding ? (input_width+stride_horizontal-1)/stride_horizontal
+                							: ((input_width-filter_width)/stride_horizontal+1);
                 this->buf_width = 0;
             }
             else
             {
-                buf_width = same_padding?(input_width+stride_horizontal-1)/stride_horizontal
-                    :((input_width-filter_width)/stride_horizontal+1);
-                output_width = (buf_width+pool_width-1)/pool_width; //pooling width
+                buf_width = same_padding ? (input_width+stride_horizontal-1)/stride_horizontal
+                						 : ((input_width-filter_width)/stride_horizontal+1);
+                output_width = (buf_width + pool_width - 1) / pool_width; // pooling width
             }
+
+            printf("stride_h %d, stride_w %d, pad_h %d, pad_w %d, out_h %d, out_w %d\n",
+            		stride_horizontal, stride_vertical, this->pad_h, this->pad_w, this->output_height, this->output_width);
+
             this->bn = NULL;
             this->filter = NULL;
             this->output = NULL;
