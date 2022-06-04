@@ -271,7 +271,7 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
     const int ots = CEIL(p->output_channels);
 
 
-    // Region of shared memory used by the 32 warps within a block to store their results.
+    // Region of shared memory used by the 32 warps within a block to store the results of their convolutions.
     volatile float* Csub = (float*) &Cs[warpid * (p->output_channels)];
     // Region of shared memory located beyond the above one used to store the filter values (see below).
     volatile unsigned* sfilter = (unsigned*) &Cs[32 * (p->output_channels)]; 
@@ -284,57 +284,73 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
     __syncthreads();
     
 
-    // Premesse: abbiamo 1024 thread per blocco (ergo, 32 warp). Inoltre, abbiamo "batch" immagini, ognuna avente dimensione H x W.
-    // Il loop sotto, pertanto, assegna durante un ciclo ad ogni warp un qualche elemento di output.
+    // PREMESSE: abbiamo 1024 thread per blocco (ergo, 32 warp). Inoltre, abbiamo # "batch" immagini, ognuna avente dimensione H x W.
+    //			 Per ogni immagine il kernel deve produrre in output # "output_channels" matrici, ciascuna avente dimensioni "output_height x output_width".
+    // Pertanto, dato un warp, il loop sottostante assegna ad ogni ciclo un qualche elemento dell'output di una qualche immagine i cui offset.
     // Ogni elemento di output racchiude
     for (int bid = blockIdx.x * 32 + warpid; bid < (p->output_height) * (p->output_width) * (p->batch); bid += gridDim.x * 32)
     {
-        const int bz = bid / (p->output_width * p->output_height); // Recupera l'ID dell'immagine assegnato al warp.
+        const int bz = bid / (p->output_width * p->output_height); 						 // Recupera l'ID dell'immagine assegnato al warp.
         const int by = (bid % (p->output_width * p->output_height)) / (p->output_width); // Recupera la riga dell'output assegnato al warp.
         const int bx = (bid % (p->output_width * p->output_height)) % (p->output_width); // Recupera la colonna dell'output assegnata al warp.
         
+        // Determina le coordinate del primo pixel in input da cui partire con i calcoli della convoluzione.
         // Coord (ax,ay) in Input from bx,by in Output
         const int ax0 = bx * (p->stride_horizontal) - (p->pad_w);
         const int ay0 = by * (p->stride_vertical) - (p->pad_h);
 
+        // Inizializza il vettore dei risultati delle convoluzioni a zero (verranno poi aggiornati con le somme dei prodotti).
         for (int i=laneid; i<(p->output_channels); i+=32) Csub[i] = 0; 
         
-        // load a window of data from Input
+        // *** Load a window of data from Input ***
+        // Qui abbiamo due loop che scansionano l'input concordemente alla dimensione dei filtri...
+        // Primo loop su coordinata y...
         for (int r=0; r<(p->filter_height); r++)
         {
-            const int ay = ay0 + r; // y-coord in Input
-            if ( (ay>=0) && (ay<(p->input_height)) )
+            const int ay = ay0 + r; // y-coord in Input (aggiunge alla coordinata y di partenza l'offset r).
+
+            if((ay >= 0) && (ay < (p->input_height))) // Test su y-coord per considerare solo le regioni dell'input che effettivamente esistono...
             {
+            	// Secondo loop su coordinata x...
                 for (int s=0; s<(p->filter_width); s++)
                 {
-                    const int ax = ax0 + s; // x-coord in Input
-                    // Within Input frame
-                    if ( (ax>=0) && (ax<(p->input_width)) )
-                    {
-                        float f0 = p->input_gpu[(bz*3+0)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; //R
-                        float f1 = p->input_gpu[(bz*3+1)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; //G
-                        float f2 = p->input_gpu[(bz*3+2)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax];//B
+                    const int ax = ax0 + s; // x-coord in Input (aggiunge alla coordinata x di partenza l'offset r).
 
+                    // Within Input frame
+                    if((ax >= 0) && (ax < (p->input_width))) // Test su x-coord per considerare solo le regioni dell'input che effettivamente esistono...
+                    {
+                    	// Caricamento dei valori dei tre canali RGB dell'immagine di input.
+                    	// NOTA: per capire la formula dell'offset
+                        float f0 = p->input_gpu[(bz*3+0)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; // R
+                        float f1 = p->input_gpu[(bz*3+1)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; // G
+                        float f2 = p->input_gpu[(bz*3+2)*(p->input_height)*(p->input_width) + ay * (p->input_width) + ax]; // B
+
+                        // ATTENZIONE: qui si assume che i filtri siano stati gia' binarizzati!
+                        // Pertanto, una singola lettura da word carica 32 valori binari
                         for (int k=0; k<ots; k++)
                         {
-                            unsigned l0 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 0*ots+k];
-                            unsigned l1 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 1*ots+k];
-                            unsigned l2 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 2*ots+k];
+                            unsigned l0 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 0*ots+k]; // Filtri da applicare al canale R.
+                            unsigned l1 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 1*ots+k]; // Filtri da applicare al canale G.
+                            unsigned l2 = sfilter[(r*(p->filter_width)+s) * (p->input_channels)*ots + 2*ots+k]; // Filtri da applicare al canale B.
 
-                            Csub[32*k+laneid] += (((l0 >> (31-laneid)) & 0x1) ? f0 : -f0)
-                                + (((l1>>(31-laneid))&0x1)?f1:-f1)
-                                + (((l2>>(31-laneid))&0x1)?f2:-f2);
+                            // Se un bit in una data posizione del filtro e' pari a 1, il valore associato letto dall'input sara' salvato
+                            // cosi' com'e', altrimenti verra' salvato il suo opposto.
+                            Csub[32*k+laneid] +=   (((l0 >> (31-laneid)) & 0x1) ? f0 : -f0)
+                                				 + (((l1 >> (31-laneid)) & 0x1) ? f1 : -f1)
+												 + (((l2 >> (31-laneid)) & 0x1) ? f2 : -f2);
                         }
                     }
-                }
-            }
+                } // End inner for.
+            } // End if.
         }
         
         
+        // Here we save the results of the convolutions associated with the output element considered by the outermost loop.
+        // NOTE: the results are binarized.
         for (int k=0; k<ots; k++)
         {
             // save shape[batch, output_height, output_width, out_channels/32]
-            bool bin = (Csub[k*32+laneid])<(p->bn_gpu)[k*32+laneid]?0:1;
+            bool bin = (Csub[k*32+laneid]) < (p->bn_gpu)[k*32+laneid] ? 0 : 1;
             unsigned C = __brev(__ballot_sync(0xFFFFFFFF,bin));
             
             // If FC layer follows, store in column-major
@@ -342,6 +358,7 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
             {
                 p->output_gpu[(((by*p->output_width)+bx)*ots+k)*FEIL(p->batch)+bz] = C;
             }
+
             // Otherwise, store in row-major
             else
             {
@@ -350,15 +367,17 @@ __device__ __inline__ void In32Conv32Layer(In32Conv32LayerParam* p)
                     + (bx*ots) + k] //Q
                     = C;
             }
+
+            // Saving of the residuals.
             if (p->save_residual)
             {
                 p->save_residual_gpu[(bz*(p->output_height)*(p->output_width)
                         *(p->output_channels))
                     + (by*(p->output_width)*(p->output_channels))
-                    + (bx*(p->output_channels)) + k*32 + laneid]=Csub[k*32+laneid];
+                    + (bx*(p->output_channels)) + k*32 + laneid] = Csub[k*32+laneid];
             }
         }
-    }
+    } // Fine loop sui valori di output.
 }
 
 
