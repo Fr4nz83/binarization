@@ -19,20 +19,27 @@
  *  @return Void.
  */
 __global__ void PackFcWeight32(const float* __restrict__ A, unsigned* B, 
-        const int A_height, const int A_width)
+							   const int A_height, const int A_width)
 {
     unsigned laneid; asm("mov.u32 %0, %%laneid;":"=r"(laneid));
-    const unsigned bx = blockIdx.x;
-    const unsigned by = blockIdx.y; 
+    const unsigned bx = blockIdx.x; // NOTA: associato al # righe / 32 (i.e., heigth/32) della matrice dei pesi.
+    const unsigned by = blockIdx.y; // Associato al # colonne / 32 (i.e., width/32) della matrice dei pesi.
+
     unsigned Bval=0;
     #pragma unroll
     for (int i=0; i<32; i++) 
     {
-        float f0 = ((by*32+laneid<A_width)&&(bx*32+i<A_height))?A[(bx*32+i)*A_width+by*32+laneid]:-1.0f;
+    	// Qui ogni thread sta binarizzando sottocolonne di 32 elementi (notare la variabile "i" del loop!).
+        float f0 = ((by*32 + laneid < A_width) && (bx*32 + i < A_height)) ?
+        		   A[((bx*32+i)*A_width) + by*32 + laneid] :
+				   -1.0f;
+
         Bval = (Bval<<1)|(f0>=0?1:0);
     }
+
+
     if (laneid < A_height*A_width)
-        B[bx*gridDim.y*32+by*32+laneid] = Bval;
+        B[bx*gridDim.y*32 + by*32 + laneid] = Bval;
 }
 
 /** @brief Unpack 32-bit row-major unsigned activation matrix into floating-point.
@@ -43,7 +50,7 @@ __global__ void PackFcWeight32(const float* __restrict__ A, unsigned* B,
  *  @return Void.
  */
 __global__ void UnpackFcOutput32(const unsigned* __restrict__  A, float* B, 
-        const int A_height, const int A_width)
+        						 const int A_height, const int A_width)
 {
     unsigned laneid; asm("mov.u32 %0, %%laneid;":"=r"(laneid));
     const unsigned by = blockIdx.y; 
@@ -68,9 +75,9 @@ __global__ void UnpackFcOutput32(const unsigned* __restrict__  A, float* B,
  *
  *  @return Void.
  */
-__global__ void PackFiltersByOutChannels32(const float* __restrict__ filter, 
-        unsigned* filter_binarized, const int in_channels, const int out_channels, 
-        const int filter_width, const int filter_height) 
+__global__ void PackFiltersByOutChannels32(const float* __restrict__ filter, unsigned* filter_binarized,
+										   const int in_channels, const int out_channels,
+										   const int filter_width, const int filter_height)
 {
     unsigned laneid; asm("mov.u32 %0, %%laneid;":"=r"(laneid));
     const int bx = blockIdx.x;//iter over (filter_width*filter_height)
@@ -342,9 +349,13 @@ class Fc32LayerParam
             CUDA_SAFE_CALL( cudaMalloc((void**)&(weight_float), weight_bytes()) );
             CUDA_SAFE_CALL( cudaMemcpy(weight_float, weight, weight_bytes(), 
                         cudaMemcpyHostToDevice) );
-            //Binarize and compact weight
-            PackFcWeight32<<<dim3( CEIL(weight_height), CEIL(weight_width) ), 32>>>(
-                    weight_float, weight_gpu, weight_height, weight_width);
+
+            //Binarize and compact weight.
+            // NOTA: con dim3 le dimensioni non specificate vengono lasciate pari a 1.
+            // NOTA2: qui sotto il kernel e' lanciato con una griglia di blocchi di thread con dimensione pari a "height x width x 1".
+            //        Ogni blocco gira con soli 32 thread (quindi un solo warp).
+            PackFcWeight32 <<<dim3(CEIL(weight_height), CEIL(weight_width)), 32>>>
+            		       (weight_float, weight_gpu, weight_height, weight_width);
             CUDA_SAFE_CALL( cudaFree(weight_float) );
             
             //Process bn
