@@ -38,8 +38,10 @@ __global__ void PackFcWeight32(const float* __restrict__ A, unsigned* B,
     }
 
 
+    // L'output segue il bit-packing format per column-major mostrato in Sezione 5.1 (Figura 4) del paper!
+    // Fare riferimento a quello.
     if (laneid < A_height*A_width)
-        B[bx*gridDim.y*32 + by*32 + laneid] = Bval;
+        B[32*bx*gridDim.y + by*32 + laneid] = Bval;
 }
 
 /** @brief Unpack 32-bit row-major unsigned activation matrix into floating-point.

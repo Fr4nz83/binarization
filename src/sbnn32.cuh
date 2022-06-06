@@ -587,7 +587,6 @@ __device__ __inline__ void Conv32Layer(Conv32LayerParam* p)
                         + (by*(p->output_width)*(p->residual_channels))
                         + (bx*(p->residual_channels)) + k*32 + laneid];
                 }
-
             }
              
             unsigned C = __brev(__ballot_sync(0xFFFFFFFF, (float)res<(p->bn_gpu)[k*32+laneid]?0:1));
