@@ -19,27 +19,44 @@
  */
 __device__ __inline__ void In32Layer(In32LayerParam* p)
 {
-    GET_LANEID;
+    GET_LANEID; // Recover warpid and laneid;
     const int gdx = (CEIL(p->input_height));
     const int gdy = (CEIL(p->input_width));
+
+    // NOTA: qui si assume che ogni blocco esegua al suo interno 32 warp (i.e., 1024 thread).
+    // Il dataset viene visto come una matrice ove ogni riga e' un'entita' ed una colonna
+    // rappresenta una singola feature.
     for (int bid = blockIdx.x*32 + warpid; bid < gdx*gdy; bid += gridDim.x*32)
     {
-        unsigned bx = bid / gdy;
-        unsigned by = bid % gdy;
+        unsigned bx = bid / gdy; // "bx" rappresenta un blocco di 32 righe.
+        unsigned by = bid % gdy; // "by" rappresenta un blocco di 32 colonne.
+        // NOTA: Una singola coppia di valori (bx,by) rappresenta una sottomatrice di 32x32 valori.
+
         unsigned val;
-        
         #pragma unroll
         for (int i=0; i<32; i++)
         {
-            float f0 = ((by*32+laneid < (p->input_width)) && (bx*32+i < (p->input_height)))?
+            // Qui ogni warp va a leggersi una sottoriga di 32 valori (se alcune posizioni vanno fuori
+        	// dalla matrice il valore viene impostato a -1).
+        	// - bx*32+i => rappresenta l'indice della riga considerata.
+        	// - by*32+laneid => rappresenta l'indice della colonna considerata.
+            float f0 = ((by*32 + laneid < (p->input_width)) && (bx*32+i < (p->input_height))) ?
             		   p->input_gpu[(bx*32+i)*(p->input_width) + by*32 + laneid] :
 					   -1.0f;
-            unsigned r0 = __brev(__ballot_sync(0xFFFFFFFF, f0>=0?1:0));
+
+            // I warp si passano le binarizzazioni dei valori fra di loro tramite "ballot". "brev" viene usato
+            // quindi usato per ruotare di 180 la riga di bit (portando cosi' il primo bit del blocco da LSB a MSB).
+            unsigned r0 = __brev(__ballot_sync(0xFFFFFFFF, f0 >= 0 ? 1 : 0));
+
+            // Il thread dentro un warp con laneid == i ha la responsabilita' (successiva) di salvare la bit-row in memoria.
+            // Al momento tale bit-row viene storata in val.
             if (laneid == i) val = r0;
         }
         
-        if (laneid < (p->input_height)*(p->input_width))
-            p->output_gpu[by*gdx*32+bx*32+laneid] = val;
+        // Finally every active warp writes out in global memory their bit-row.
+        // gdx => number of ints required to store a whole bit-column.
+        if (laneid < (p->input_height) * (p->input_width))
+            p->output_gpu[by*gdx*32 + bx*32 + laneid] = val;
     }
 }
 

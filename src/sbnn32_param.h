@@ -13,7 +13,7 @@
 /** @brief Binarize and pack weight matrix into 32-bit unsigned matrix.
  *
  *  Binarization function to convert row-major 32-bit floating-point weight matrix into 
- *  bit column-major bit-matrix. This is for the preparation of the weight matrices for 
+ *  bit row-major bit-matrix. This is for the preparation of the weight matrices for
  *  FC layers.
  *
  *  @return Void.
