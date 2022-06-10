@@ -24,6 +24,7 @@
 #include "dataset_reader.h"
 
 #include "binarization.cuh"
+#include "my_layers.cuh"
 
 #include "cnpy.h"
 
@@ -46,8 +47,6 @@ int main_new()
 {
     using namespace cooperative_groups;
     
-    
-    cout << "Using BTSC-32\n";
 
     //=============== Device Configuration =================
     int dev = 0;
@@ -55,21 +54,28 @@ int main_new()
 
 
 
-    //================ Set Network =================
+    //================ Setup Network layers =================
     
-    // *** Input Layer ***
-    constexpr uint32_t image_height = 32, image_width = 32, image_channel = 3, test_batch = 10000;
-    In32Conv32LayerParam* bconv1 = new In32Conv32LayerParam("Conv1",
-    														image_height, image_width, // Image size
-                											3, 3,     // Filter size
-															3, 128,   // # input channels and # output channels
-															test_batch, // Batch size
-															1,1, // Stride offsets
-															true, // same padding flag
-															0,0,      // Pooling size
-															false,	  // Transpose flag
-															true);    //save residual flag
+    // *** Input Layer *** //
+    constexpr uint32_t image_height = 32,
+    		  image_width = 32,
+			  image_channels = 3,
+			  filter_height = 3,
+			  filter_width = 3,
+			  num_filters = 10,
+			  test_batch = 10000;
     
+    // *** Initial convolutional Layer *** //
+    ConvLayer in_conv_layer = ConvLayer("InConv",
+									    image_height,
+										image_width,
+										filter_height,
+										filter_width,
+										image_channels,
+										num_filters,
+										test_batch);
+    exit(1);
+
     // *** Fc1 Layer ***
     // NOTA: questo layer si aspetta una matrice dei pesi in formato row-major con #righe == #features e #colonne == #hidden_units. 
     //cout << "Initializing the weight layer..." << std::endl;
