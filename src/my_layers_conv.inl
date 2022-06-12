@@ -21,6 +21,8 @@ bool ConvLayer::initialize_cuDNN()
 
 	// Set the algorithm used to compute the convolution.
 	this->convolution_algorithm = CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD;
+	// this->convolution_algorithm = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
+	// this->convolution_algorithm = CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING;
 
 	// Allocate the convolution descriptor.
 	cudnnCreateConvolutionDescriptor(&this->convolution_descriptor);
@@ -169,10 +171,10 @@ ConvLayer::ConvLayer(const char* name,
 
 
 	// A few prints.
-	std::cout << this->name << " => Input size: H=" << this->input_height << " W=" << this->input_width << " C=" << this->input_channels << std::endl;
+	std::cout << this->name << " => Input characteristics: C=" << this->input_channels << " H=" << this->input_height << " W=" << this->input_width << std::endl;
 	std::cout << this->name << " => Same convolution? " << (this->same_conv ? "YES" : "NO") << " -- Calculated padding: H=" << this->pad_h << " W=" << this->pad_h << std::endl;
-	std::cout << this->name << " => Filter characterstics: N=" << this->output_channels << " H=" << this->filter_height << " W=" << this->filter_width << std::endl;
-	std::cout << this->name << " => Output size: H=" << this->output_height << " W=" << this->output_width << " C=" << this->output_channels << std::endl;
+	std::cout << this->name << " => Filter characteristics: N=" << this->output_channels << " C=" << this->input_channels << " H=" << this->filter_height << " W=" << this->filter_width << std::endl;
+	std::cout << this->name << " => Output characteristics: C=" << this->output_channels << " H=" << this->output_height << " W=" << this->output_width << std::endl;
 
 
 	// Initialize cuDNN data structures.

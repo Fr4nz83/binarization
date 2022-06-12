@@ -61,7 +61,7 @@ int main_new()
 			  image_channels = 3,
 			  filter_height = 3,
 			  filter_width = 3,
-			  num_filters = 3;
+			  num_filters = 10;
 
     // Read the image dataset.
     std::string cifar10_dir = "../dataset/data_batch_1.bin";
