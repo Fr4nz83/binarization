@@ -1,0 +1,79 @@
+#include "generator.h"
+#include <random>
+#include <stdio.h>
+#include <iostream>
+
+
+std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
+{
+	std::random_device rd;  //Will be used to obtain a seed for the random number engine
+	std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+	std::uniform_real_distribution<> float_dist(-5, 5);
+	    
+	std::vector<float> vec(rows * cols);
+	for (auto& el : vec) el = (float) float_dist(gen);
+	    
+	return vec;
+}
+
+std::vector<float> gen_matrix(const uint32_t& batch, const uint32_t& rows, const uint32_t& cols)
+{   
+    	return gen_matrix(batch * rows, cols);
+}
+
+void write_array(const std::vector<float>& vec, const char* namefile)
+{
+	auto fp = fopen(namefile, "w");
+	// check for error here
+
+	for(const auto& el : vec) 
+		fprintf(fp, "%f ", el);
+
+	fclose(fp);
+}
+
+std::vector<float> read_array(const char* namefile, const uint32_t& size)
+{   
+    std::vector<float> array(size);
+    
+    auto cf = fopen(namefile, "r");
+    for (int i=0; i < size; i++)
+    {
+    	fscanf(cf, "%f", &array[i]);
+    }   
+    fclose(cf);
+    
+    return(array);
+}
+
+float* gen_filter_nchw(const uint32_t& num_in_channels,
+				   	   const uint32_t& num_out_channels)
+{
+	constexpr uint32_t size_filter = 3;
+
+	// Filtro di test.
+	const float kernel_template[size_filter][size_filter] =
+	{
+	  {1,  1, 1},
+	  {1, -8, 1},
+	  {1,  1, 1}
+	};
+
+	float *kernel_ptr = new float[num_out_channels * num_in_channels * size_filter * size_filter];
+	for (int o = 0; o < num_out_channels; o++)
+	{
+		const uint32_t offset_filter = o * (num_in_channels * size_filter * size_filter);
+		for (int i = 0; i < num_in_channels; i++)
+		{
+			const uint32_t offset_in_channel = offset_filter + i * (size_filter * size_filter);
+			for (int row = 0; row < size_filter; row++)
+			{
+				const uint32_t offset_row = offset_in_channel + row * size_filter;
+				for (int column = 0; column < size_filter; column++)
+					kernel_ptr[offset_row + column] = kernel_template[row][column];
+			}
+		}
+	}
+
+	return(kernel_ptr);
+}

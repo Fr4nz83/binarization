@@ -102,8 +102,7 @@ public:
 	
 	static std::vector<cif_img_t> read_dataset_cifar10(const std::string& filename);
 	static std::vector<cif_img_float_t> read_dataset_cifar10_float(const std::string& filename);
-	static uint32_t* transform_dataset_nhwc(const std::vector<cif_img_t>& dataset);
-	static float* transform_dataset_nhwc_float(const std::vector<cif_img_float_t>& dataset);
+	static float* transform_dataset_nchw_float(const std::vector<cif_img_float_t>& dataset);
 };
 
 
