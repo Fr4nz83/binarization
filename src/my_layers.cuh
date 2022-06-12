@@ -23,20 +23,25 @@ class BatchNormFullPrecLayer
 {
 public:
 
-	// Layer input data structures
-	float* input_gpu;
-	unsigned input_width;
-	unsigned input_height;
-	unsigned input_channels;
-
-	// Layer output data structures
-	float* output_gpu;
-	unsigned output_width;
-	unsigned output_height;
-	unsigned output_channels;
+	// Layer data structures
+	unsigned batch;
+	float* data_gpu;
+	unsigned data_width;
+	unsigned data_height;
+	unsigned data_channels;
 
 	// GPU shadow.
-	// BatchNormLayerFullPrec* gpu;
+	BatchNormFullPrecLayer* gpu;
+
+	int input_size() {return this->data_channels*this->data_height*this->data_width*this->batch;}
+	int input_bytes() {return this->input_size() * sizeof(float);}
+	int output_size() {return this->data_channels*this->data_height*this->data_width*this->batch;}
+	int output_bytes() {return this->output_size() * sizeof(unsigned);}
+	int bn_size() {return this->data_channels;}
+	int bn_bytes() {return this->bn_size() * sizeof(float);}
+
+	void set_input_gpu(float* input_gpu, unsigned batch) {this->data_gpu = input_gpu; this->batch = batch;}
+	float* get_output_gpu() {return this->data_gpu;}
 };
 
 
@@ -86,7 +91,7 @@ protected:
 	float *save_residual_gpu;
 
 	// GPU shadow.
-	ConvLayer* gpu;
+	// ConvLayer* gpu;
 
 	// cuDNN data structures.
 	cudnnHandle_t cudnn;
@@ -140,14 +145,15 @@ public:
 
 	// *** PUBLIC METHODS *** //
 
-	int input_size() {return input_channels*input_height*input_width*batch;}
+	int input_size() {return this->input_channels*this->input_height*this->input_width*this->batch;}
 	int input_bytes() {return input_size() * sizeof(float);}
-	int filter_size() {return output_channels*input_channels*filter_height*filter_width;}
-	int filter_bytes() {return filter_size() * sizeof(float);}
-	int output_size() {return output_channels*output_height*output_width*batch;}
-	int output_bytes() {return output_size() * sizeof(unsigned);}
-	int bn_size() {return output_channels;}
-	int bn_bytes() {return bn_size() * sizeof(float);}
+	int filter_size() {return this->output_channels*this->input_channels*this->filter_height*this->filter_width;}
+	int filter_bytes() {return this->filter_size() * sizeof(float);}
+	int output_size() {return this->output_channels*this->output_height*this->output_width*this->batch;}
+	int output_bytes() {return this->output_size() * sizeof(unsigned);}
+	int bn_size() {return this->output_channels;}
+	int bn_bytes() {return this->bn_size() * sizeof(float);}
+	int batch_size() {return this->batch;}
 
 	// Sets and gets for input/output pointers.
 	void set_input_gpu(float* input_gpu) {this->input_gpu = input_gpu;}
