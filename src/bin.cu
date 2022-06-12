@@ -66,6 +66,7 @@ int main_new()
 			  test_batch = 10000;
     
     // *** Initial convolutional Layer *** //
+
     ConvLayer in_conv_layer = ConvLayer("InConv",
 									    image_height,
 										image_width,
