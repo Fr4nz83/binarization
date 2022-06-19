@@ -48,7 +48,7 @@ bool ConvLayer::initialize_cuDNN()
 bool ConvLayer::ready()
 {
 	// Pointers sanity check.
-	if (this->input_gpu == NULL)
+	if (this->input_gpu == NULL || this->size_batch == 0)
 	{
 		fprintf(stderr, "Input data has not been uploaded to GPU.\n");
 		exit(1);
@@ -133,6 +133,7 @@ ConvLayer::ConvLayer(const char* name,
 {
 	strncpy(this->name, name, 8);
 
+	this->size_batch = 0;
 	this->input_height = input_height;
 	this->input_width = input_width;
 	this->filter_height = filter_height;
@@ -185,6 +186,16 @@ ConvLayer::ConvLayer(const char* name,
 
 // *** PUBLIC METHODS DEFINITIONS *** //
 
+void ConvLayer::download_output_gpu(float* output)
+{
+	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+}
+
+void ConvLayer::download_residual_gpu(float* output)
+{
+	CUDA_SAFE_CALL(cudaMemcpy(output, this->save_residual_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+}
+
 /**
  * @brief This method loads the filter and batch normalization (if required) data needed by the layer.
  *
@@ -236,7 +247,7 @@ bool ConvLayer::initialize_filters(const float* filters, const float* bn)
 bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
 {
 	// Save the number of images in the dataset.
-	this->batch = batch_size;
+	this->size_batch = batch_size;
 
 
 	// Allocate and then set input array on GPU.
@@ -275,7 +286,7 @@ bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
 	status = cudnnSetTensor4dDescriptor(this->input_descriptor,
 										/*format=*/CUDNN_TENSOR_NCHW,
 										/*dataType=*/CUDNN_DATA_FLOAT,
-										/*batch_size=*/this->batch,
+										/*batch_size=*/this->size_batch,
 										/*channels=*/this->input_channels,
 										/*image_height=*/this->input_height,
 										/*image_width=*/this->input_width);
@@ -288,7 +299,7 @@ bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
 	status = cudnnSetTensor4dDescriptor(this->output_descriptor,
 										  /*format=*/CUDNN_TENSOR_NCHW,
 										  /*dataType=*/CUDNN_DATA_FLOAT,
-										  /*batch_size=*/this->batch,
+										  /*batch_size=*/this->size_batch,
 										  /*channels=*/this->output_channels,
 										  /*image_height=*/this->output_height,
 										  /*image_width=*/this->output_width);
@@ -319,6 +330,8 @@ bool ConvLayer::execute_layer()
 {
 	cudnnStatus_t status;
 	constexpr float alpha = 1, beta = 0;
+
+
 	status = cudnnConvolutionForward(this->cudnn,
 									 &alpha,
 									 this->input_descriptor,
@@ -334,6 +347,7 @@ bool ConvLayer::execute_layer()
 									 this->output_gpu);
 	if (status != CUDNN_STATUS_SUCCESS) return false;
 	std::cout << this->name << " => cuDNN convolution computation OK!" << std::endl;
+
 
 	return true;
 }
