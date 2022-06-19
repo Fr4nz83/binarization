@@ -24,7 +24,6 @@ class BatchNormFullPrecLayer
 public:
 
 	// *** FIELDS *** //
-
 	unsigned size_batch;
 
 	float* data_gpu;
@@ -32,8 +31,8 @@ public:
 	unsigned data_height;
 	unsigned data_channels;
 
-	float* scale;
-	float* shift;
+	float* scale_gpu;
+	float* shift_gpu;
 
 	// GPU shadow.
 	BatchNormFullPrecLayer* gpu;
@@ -44,7 +43,7 @@ public:
 
 	// *** CTORS/DTOR *** //
 
-	BatchNormFullPrecLayer(const unsigned& size_batch,
+	BatchNormFullPrecLayer(const char* name,
 						   const unsigned& data_width,
 						   const unsigned& data_height,
 						   const unsigned& data_channels,
@@ -57,19 +56,29 @@ public:
 	// *** METHODS *** //
 
 	void release();
+	BatchNormFullPrecLayer* ready();
 
 	inline int input_size() {return this->data_channels * this->data_height * this->data_width * this->size_batch;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
 	inline int output_size() {return this->input_size();}
 	inline int output_bytes() {return this->input_bytes();}
 
-	void load_input_gpu();
-	inline void set_input_gpu(float* input_gpu, unsigned batch) {this->data_gpu = input_gpu; this->size_batch = batch;}
+	BatchNormFullPrecLayer* load_input_gpu(float* input_gpu, unsigned size_batch);
+	inline BatchNormFullPrecLayer* set_input_gpu(float* input_gpu, unsigned size_batch)
+	{
+		this->data_gpu = input_gpu;
+		this->size_batch = size_batch;
+		return this->ready();
+	}
+	inline int get_size_batch() {return this->size_batch;}
 	inline float* get_output_gpu() {return this->data_gpu;}
+	inline void download_output_gpu(float* output);
 };
 
 // Pull in the definitions of the methods associated with the class BatchNormFullPrecLayer.
 #include "my_layers_batch_norm.inl"
+
+
 
 
 

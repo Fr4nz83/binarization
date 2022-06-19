@@ -28,6 +28,8 @@
 #include "generator.h"
 #include "cnpy.h"
 
+#include "unit_test.cuh"
+
 
 
 // *** FORWARD DECLARATIONS *** //
@@ -39,8 +41,14 @@ int main_new();
 
 int main()
 {
-	return main_new();
+	// return main_new();
+
+
+	// *** Unit test *** //
+	// return test_convfp_layer();
+	return test_bnfp_layer();
 }
+
 
 
 int main_new()
@@ -82,28 +90,6 @@ int main_new()
     
 
     //================ Setup Network layers =================
-
-    // *** Setup initial convolutional Layer *** //
-    ConvLayer in_conv_layer = ConvLayer("InConv",
-									    image_height,
-										image_width,
-										filter_height,
-										filter_width,
-										image_channels,
-										num_filters);
-
-    // Setup ConvLayer filters.
-    in_conv_layer.initialize_filters(filter_test);
-
-    // Load ConvLayer input data.
-    in_conv_layer.load_input(size_batch, img_data);
-
-    // Execute ConvLayer.
-    in_conv_layer.execute_layer();
-    exit(1);
-
-
-
 
     // *** Fc1 Layer ***
     // NOTA: questo layer si aspetta una matrice dei pesi in formato row-major con #righe == #features e #colonne == #hidden_units. 

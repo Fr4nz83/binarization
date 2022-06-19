@@ -1,25 +1,96 @@
 // *** CTORS/DTOR DEFINITIONS *** //
 
-BatchNormFullPrecLayer::BatchNormFullPrecLayer(const unsigned& size_batch,
+BatchNormFullPrecLayer::BatchNormFullPrecLayer(const char* name,
 											   const unsigned& data_width,
 											   const unsigned& data_height,
 											   const unsigned& data_channels,
 											   const float* scale,
 											   const float* shift) :
-size_batch(size_batch),
+size_batch(0),
 data_gpu(NULL),
 data_width(data_width),
 data_height(data_height),
 data_channels(data_channels),
 gpu(NULL)
 {
+	strncpy(this->name, name, 8);
+	std::cout << "Invoking constructor for " << this->name << std::endl;
+
 	// Load the scaling scalars (1 per channel) into the GPU.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->scale), data_channels * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpy(this->scale, scale, data_channels * sizeof(float), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->scale_gpu), data_channels * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->scale_gpu, scale, data_channels * sizeof(float), cudaMemcpyHostToDevice));
 
 	// Load the shift scalars (1 per channel) into the GPU.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->shift), data_channels * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpy(this->shift, shift, data_channels * sizeof(float), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->shift_gpu), data_channels * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->shift_gpu, shift, data_channels * sizeof(float), cudaMemcpyHostToDevice));
+}
+
+// *** PUBLIC METHODS DEFINITIONS *** //
+
+void BatchNormFullPrecLayer::release()
+{
+	// Dealloc data space (may be NULL in case this layer is connected to other layers).
+	if(this->data_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->data_gpu) );
+		this->data_gpu = NULL;
+	}
+
+	// Dealloc scale factors vector.
+	CUDA_SAFE_CALL( cudaFree(this->scale_gpu) );
+	this->scale_gpu = NULL;
+
+	// Dealloc shift factors vector.
+	CUDA_SAFE_CALL( cudaFree(this->shift_gpu) );
+	this->shift_gpu = NULL;
+}
+
+BatchNormFullPrecLayer* BatchNormFullPrecLayer::ready()
+{
+	// Dealloc data space (may be NULL in case this layer is connected to other layers).
+	if(this->data_gpu == NULL || this->input_size() == 0)
+	{
+		std::cout << "Input data has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	// Dealloc scale factors vector.
+	if(this->scale_gpu == NULL)
+	{
+		std::cout << "Scale factors have not been copied to the GPU." << std::endl;
+		exit(1);
+	}
+
+	// Dealloc shift factors vector.
+	if(this->shift_gpu == NULL)
+	{
+		std::cout << "Shift factors have not been copied to the GPU." << std::endl;
+		exit(1);
+	}
+
+
+	// Allocate shadow copy of this instance on GPU.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->gpu), sizeof(BatchNormFullPrecLayer)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->gpu, this, sizeof(BatchNormFullPrecLayer), cudaMemcpyHostToDevice));
+
+
+	// Return the pointer to the shadow copy (to be used within a kernel).
+	return this->gpu;
+}
+
+BatchNormFullPrecLayer* BatchNormFullPrecLayer::load_input_gpu(float* input_gpu, unsigned size_batch)
+{
+	this->size_batch = size_batch;
+
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->data_gpu), this->input_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(this->data_gpu, input_gpu, this->input_bytes(), cudaMemcpyHostToDevice));
+
+	return(this->ready());
+}
+
+void BatchNormFullPrecLayer::download_output_gpu(float* output)
+{
+	CUDA_SAFE_CALL(cudaMemcpy(output, this->data_gpu, this->input_bytes(), cudaMemcpyDeviceToHost));
 }
 
 
@@ -31,6 +102,7 @@ gpu(NULL)
  *
  * @note The kernel assumes that the dataset is stored in NCHW format.
  */
+// TODO: this kernel will have to be a __device__ function at some point.
 __global__ void BNFPLayer(BatchNormFullPrecLayer* p)
 {
 	constexpr uint8_t WARPSIZE = 32;
@@ -51,16 +123,16 @@ __global__ void BNFPLayer(BatchNormFullPrecLayer* p)
 	for(uint32_t c = 0; c < num_channels; c++)
 	{
 		// Read the scale and shift factors associated with the channel currently considered.
-		const float scale = p->scale[c];
-		const float shift = p->shift[c];
+		const float scale = p->scale_gpu[c];
+		const float shift = p->shift_gpu[c];
 
 		// Each warp processes an image per loop.
 		for(uint32_t id_img = block_id * warps_block + warp_id; id_img < p->size_batch; id_img =+ num_img_per_grid)
 		{
-			// Compute the memory offset where the values associated with a given image and channel block starts.
+			// Compute the memory offset where the values associated with a given image and channel block start.
 			const uint32_t offset_img = id_img * (num_channels * img_size) + (c * img_size);
 
-			// The threads in a warp uses coalescing while reading and then updating the values.
+			// Here threads in a warp use coalescing while reading and then updating the values.
 			for(uint32_t i = lane_id; i < img_size; i += WARPSIZE)
 				p->data_gpu[offset_img + i] = scale * p->data_gpu[offset_img + i] + shift;
 		}
