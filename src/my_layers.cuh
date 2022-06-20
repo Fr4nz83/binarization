@@ -87,7 +87,8 @@ public:
 	// *** FIELDS *** //
 	unsigned size_batch;
 
-	float* data_gpu;
+	float* input_gpu;
+	float* output_gpu;
 	unsigned data_width;
 	unsigned data_height;
 	unsigned data_channels;
@@ -122,12 +123,12 @@ public:
 	TransposeFullPrecLayer* load_input_gpu(float* input_gpu, unsigned size_batch);
 	inline TransposeFullPrecLayer* set_input_gpu(float* input_gpu, unsigned size_batch)
 	{
-		this->data_gpu = input_gpu;
+		this->input_gpu = input_gpu;
 		this->size_batch = size_batch;
 		return this->ready();
 	}
 	inline int get_size_batch() {return this->size_batch;}
-	inline float* get_output_gpu() {return this->data_gpu;}
+	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
 };
 

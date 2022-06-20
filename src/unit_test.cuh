@@ -171,3 +171,72 @@ int test_bnfp_layer()
 
 	return 0;
 }
+
+
+int test_transpose_layer()
+{
+    using namespace cooperative_groups;
+
+    //=============== Device Configuration =================
+	int dev = 0;
+	cudaSetDevice(dev);
+
+
+
+	//=============== Read image dataset =================
+
+	constexpr uint32_t image_height = 32,
+			  	  	   image_width = 32,
+					   image_channels = 3;
+
+	// Read the image dataset.
+	std::string cifar10_dir = "../dataset/data_batch_1.bin";
+	auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
+	std::cout << "Number of images: " << set_images.size() << std::endl;
+	const uint32_t size_batch = set_images.size();
+
+	// Convert the dataset into a NCHW float array.
+	float *img_data = ImgDatasetReader<image_height,image_width>::transform_dataset_nchw_float(set_images);
+	// auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
+	// float *img_data = tmp.data();
+
+
+	TransposeFullPrecLayer tr_l1("tr_fp1",
+								 image_width,     // Input width
+								 image_height,    // Input height
+								 image_channels); // Number of channels;
+
+
+	TransposeFullPrecLayer* gpu_copy = tr_l1.load_input_gpu(img_data, size_batch);
+
+
+	// Batch normalization kernel execution.
+	// - One block per image.
+	// - 32 threads (1 warp) per block
+	TransposeFPLayer <<<1, 32>>>(gpu_copy);
+
+
+	float *test_output = new float[tr_l1.input_size()];
+	tr_l1.download_output_gpu(test_output);
+
+
+	// Veify GPU output correctness.
+	/*for(uint32_t n = 0; n < size_batch; n++)
+	{
+		const uint32_t offset_img = n * image_channels * image_height * image_width;
+		for(uint32_t c = 0; c < image_channels; c++)
+		{
+			const uint32_t offset_color = (image_height * image_width) * c;
+
+			for(uint32_t i = 0; i < image_height * image_width; i++)
+			{
+				float cpu_o = scale_test[c] * img_data[offset_img + offset_color + i] + shift_test[c];
+				float gpu_o = test_output[offset_img + offset_color + i];
+				if(std::abs(cpu_o - gpu_o) > 1e-5)
+					std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
+			}
+		}
+	}*/
+
+	return 0;
+}

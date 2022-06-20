@@ -46,7 +46,8 @@ int main()
 
 	// *** Unit test *** //
 	// return test_convfp_layer();
-	return test_bnfp_layer();
+	// return test_bnfp_layer();
+	return test_transpose_layer();
 }
 
 
