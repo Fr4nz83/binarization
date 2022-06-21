@@ -7,9 +7,9 @@ TransposeFullPrecLayer::TransposeFullPrecLayer(const char* name,
 size_batch(0),
 input_gpu(NULL),
 output_gpu(NULL),
-data_width(data_width),
-data_height(data_height),
-data_channels(data_channels),
+input_width(data_width),
+input_height(data_height),
+input_channels(data_channels),
 gpu(NULL)
 {
 	strncpy(this->name, name, 8);
@@ -20,7 +20,9 @@ gpu(NULL)
 
 void TransposeFullPrecLayer::release()
 {
-	// Dealloc data space (may be NULL in case this layer is connected to other layers).
+	this->size_batch = 0;
+
+	// Various deallocs.
 	if(this->input_gpu != NULL)
 	{
 		CUDA_SAFE_CALL( cudaFree(this->input_gpu) );
@@ -31,6 +33,12 @@ void TransposeFullPrecLayer::release()
 	{
 		CUDA_SAFE_CALL( cudaFree(this->output_gpu) );
 		this->output_gpu = NULL;
+	}
+
+	if(this->gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->gpu) );
+		this->gpu = NULL;
 	}
 }
 
@@ -52,18 +60,25 @@ TransposeFullPrecLayer* TransposeFullPrecLayer::ready()
 	return this->gpu;
 }
 
-TransposeFullPrecLayer* TransposeFullPrecLayer::load_input_gpu(float* input_gpu, unsigned size_batch)
+void TransposeFullPrecLayer::load_input_gpu(float* input, unsigned size_batch)
 {
 	this->size_batch = size_batch;
 
 	// Allocate and load input.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input_gpu, this->input_bytes(), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
+}
 
+void TransposeFullPrecLayer::set_input_gpu(float* input_gpu, unsigned size_batch)
+{
+	this->input_gpu = input_gpu;
+	this->size_batch = size_batch;
+}
+
+void TransposeFullPrecLayer::allocate_output_gpu()
+{
 	// Allocate space for output.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->input_bytes()));
-
-	return(this->ready());
 }
 
 void TransposeFullPrecLayer::download_output_gpu(float* output)
@@ -95,20 +110,20 @@ __global__ void TransposeFPLayer(TransposeFullPrecLayer* p)
 
 
 	// General properties of an image.
-	const uint32_t height = p->data_height;
-	const uint32_t width = p->data_width;
+	const uint32_t height = p->input_height;
+	const uint32_t width = p->input_width;
 	const uint32_t blocks_rows_img = height / WARPSIZE + (height % WARPSIZE != 0);
 	const uint32_t blocks_columns_img = width / WARPSIZE + (width % WARPSIZE != 0);
 	const uint32_t num_blocks_per_img = blocks_rows_img * blocks_columns_img;
 	const uint32_t img_size = height * width;
-	const uint32_t num_channels = p->data_channels;
+	const uint32_t num_channels = p->input_channels;
 
 
-	// Process each color dataset-wise.
-	for(uint32_t c = 0; c < num_channels; c++)
+	// Each block (warp) processes an image at a time.
+	for(uint32_t id_img = block_id; id_img < p->size_batch; id_img += num_blocks_grid)
 	{
-		// Each block (warp) processes an image at a time.
-		for(uint32_t id_img = block_id; id_img < p->size_batch; id_img =+ num_blocks_grid)
+		// Process each color dataset-wise.
+		for(uint32_t c = 0; c < num_channels; c++)
 		{
 			// Compute the memory offset where the values associated with a given image and channel block start.
 			const uint32_t offset_img = id_img * (num_channels * img_size) + (c * img_size);
@@ -130,29 +145,29 @@ __global__ void TransposeFPLayer(TransposeFullPrecLayer* p)
 				const uint32_t end_column = min(start_column + WARPSIZE, width);
 
 
-				// 1 - Write a sub-matrix of up to 32x32 elements to shared memory.
-				// #pragma unroll WARPSIZE
+				// 1 - Write a row-major sub-matrix of up to 32x32 elements to shared memory.
+				#pragma unroll WARPSIZE
 				for(uint32_t row = start_row; row < end_row; row++)
 				{
 					// Read a single row of up to 32 elements.
 					// In the shared mem buffer each row represents a sub-column which values
 					// were read from the thread having ID "lane_id" within the warp.
-					const uint32_t offset_tid = offset_img + (row * width) + (start_column + lane_id);
+					const uint32_t read_offset_tid = offset_img + (row * width) + (start_column + lane_id);
 					if(start_column + lane_id < end_column)
-						sub_m[lane_id][row % WARPSIZE] = p->input_gpu[offset_tid];
+						sub_m[lane_id][row % WARPSIZE] = p->input_gpu[read_offset_tid];
 				}
 
 
-				// 2 - Now write the transposed matrix from shared memory to global memory.
-				// #pragma unroll WARPSIZE
+				// 2 - Now write the matrix transposed from shared memory to global memory.
+				#pragma unroll WARPSIZE
 				for(uint32_t column = start_column; column < end_column; column++)
 				{
 					// Read a single row of up to 32 elements.
 					// In the shared mem buffer each row represents a sub-column which values
 					// were read from the thread having ID "lane_id" within the warp.
-					const uint32_t offset_tid = offset_img + (column * height) + (start_row + lane_id);
+					const uint32_t write_offset_tid = offset_img + (column * height) + (start_row + lane_id);
 					if(start_row + lane_id < end_row)
-						p->output_gpu[offset_tid] = sub_m[column % WARPSIZE][lane_id];
+						p->output_gpu[write_offset_tid] = sub_m[column % WARPSIZE][lane_id];
 				}
 			}
 		}

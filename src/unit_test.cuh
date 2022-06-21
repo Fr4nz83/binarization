@@ -144,7 +144,7 @@ int test_bnfp_layer()
 	// Batch normalization kernel execution.
 	// - One block per image.
 	// - 32 threads (1 warp) per block
-	BNFPLayer <<<size_batch, 32>>>(gpu_copy);
+	BNFPLayer <<<500, 32>>>(gpu_copy);
 
 
 	float *test_output = new float[bn_l1.input_size()];
@@ -183,23 +183,19 @@ int test_transpose_layer()
 
 
 
-	//=============== Read image dataset =================
+	//=============== Generate fake image dataset =================
 
-	constexpr uint32_t image_height = 32,
+	constexpr uint32_t size_batch = 45000,
+					   image_height = 32,
 			  	  	   image_width = 32,
-					   image_channels = 3;
+					   image_channels = 10,
+					   THREADS_PER_BLOCK = 32;
+	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
+	float* img_data = tmp.data();
+	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
 
-	// Read the image dataset.
-	std::string cifar10_dir = "../dataset/data_batch_1.bin";
-	auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
-	std::cout << "Number of images: " << set_images.size() << std::endl;
-	const uint32_t size_batch = set_images.size();
 
-	// Convert the dataset into a NCHW float array.
-	float *img_data = ImgDatasetReader<image_height,image_width>::transform_dataset_nchw_float(set_images);
-	// auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
-	// float *img_data = tmp.data();
-
+	//=============== Set up layer =================
 
 	TransposeFullPrecLayer tr_l1("tr_fp1",
 								 image_width,     // Input width
@@ -207,36 +203,74 @@ int test_transpose_layer()
 								 image_channels); // Number of channels;
 
 
-	TransposeFullPrecLayer* gpu_copy = tr_l1.load_input_gpu(img_data, size_batch);
+
+	cudaEvent_t start, end_load, stop;
+	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
-	// Batch normalization kernel execution.
+	cudaEventRecord(start);
+	// Load input data from CPU to GPU.
+	tr_l1.load_input_gpu(img_data, size_batch);
+	cudaEventRecord(end_load);
+
+	// Allocate output memory on GPU.
+	tr_l1.allocate_output_gpu();
+
+	// Prepare the layer for execution
+	TransposeFullPrecLayer* gpu_copy = tr_l1.ready();
+
+
+	// Transpose kernel execution.
 	// - One block per image.
 	// - 32 threads (1 warp) per block
-	TransposeFPLayer <<<1, 32>>>(gpu_copy);
+	TransposeFPLayer <<<size_batch, THREADS_PER_BLOCK>>> (gpu_copy);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
 
 
+	// Copy output from GPU to CPU.
 	float *test_output = new float[tr_l1.input_size()];
 	tr_l1.download_output_gpu(test_output);
 
 
-	// Veify GPU output correctness.
-	/*for(uint32_t n = 0; n < size_batch; n++)
+
+	float ms_load, ms_kernel;
+	cudaEventElapsedTime(&ms_load, start, end_load);
+	cudaEventElapsedTime(&ms_kernel, end_load, stop);
+	std::cout << "Load time: " << ms_load << " ms." << std::endl;
+	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
+
+
+
+	// Verify GPU output correctness.
+	bool check = true;
+	for(uint32_t n = 0; n < size_batch; n++)
 	{
+		//std::cout << "Image " << n << std::endl;
+
 		const uint32_t offset_img = n * image_channels * image_height * image_width;
 		for(uint32_t c = 0; c < image_channels; c++)
 		{
-			const uint32_t offset_color = (image_height * image_width) * c;
+			//std::cout << "Channel " << c << std::endl;
 
-			for(uint32_t i = 0; i < image_height * image_width; i++)
+			const uint32_t offset_color = (image_height * image_width) * c;
+			for(uint32_t row = 0; row < image_height; row++)
 			{
-				float cpu_o = scale_test[c] * img_data[offset_img + offset_color + i] + shift_test[c];
-				float gpu_o = test_output[offset_img + offset_color + i];
-				if(std::abs(cpu_o - gpu_o) > 1e-5)
-					std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
+				//std::cout << "Row " << row << ": ";
+
+				for(uint32_t column = 0; column < image_width; column++)
+				{
+					float cpu_o = img_data[offset_img + offset_color + (row * image_width) + column];
+					float gpu_o = test_output[offset_img + offset_color + (column * image_height) + row];
+
+					if(cpu_o != gpu_o) check = false; // std::cout << "ERRORE!" << std::endl;
+				}
+				// std::cout << std::endl;
 			}
 		}
-	}*/
+	}
+	std::cout << "Check correttezza output GPU: " << (check ? "OK" : "KO") << std::endl;
+
 
 	return 0;
 }

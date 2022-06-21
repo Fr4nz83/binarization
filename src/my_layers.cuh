@@ -89,9 +89,10 @@ public:
 
 	float* input_gpu;
 	float* output_gpu;
-	unsigned data_width;
-	unsigned data_height;
-	unsigned data_channels;
+
+	unsigned input_width;
+	unsigned input_height;
+	unsigned input_channels;
 
 	// GPU shadow.
 	TransposeFullPrecLayer* gpu;
@@ -112,21 +113,23 @@ public:
 
 	// *** METHODS *** //
 
-	void release();
+	inline void release();
+
 	TransposeFullPrecLayer* ready();
 
-	inline int input_size() {return this->data_channels * this->data_height * this->data_width * this->size_batch;}
+	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
 	inline int output_size() {return this->input_size();}
 	inline int output_bytes() {return this->input_bytes();}
+	inline int get_input_width() {return this->input_width;}
+	inline int get_input_heigth() {return this->input_height;}
+	inline int get_output_width() {return this->input_height;}
+	inline int get_output_height() {return this->input_width;}
 
-	TransposeFullPrecLayer* load_input_gpu(float* input_gpu, unsigned size_batch);
-	inline TransposeFullPrecLayer* set_input_gpu(float* input_gpu, unsigned size_batch)
-	{
-		this->input_gpu = input_gpu;
-		this->size_batch = size_batch;
-		return this->ready();
-	}
+	inline void load_input_gpu(float* input, unsigned size_batch);
+	inline void set_input_gpu(float* input_gpu, unsigned size_batch);
+	inline void allocate_output_gpu();
+
 	inline int get_size_batch() {return this->size_batch;}
 	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
