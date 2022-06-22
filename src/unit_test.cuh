@@ -204,36 +204,36 @@ int test_transpose_layer()
 
 
 
+	//=============== Layer execution =================
+
+	// CUDA variables needed to measure the time the various operations take.
 	cudaEvent_t start, end_load, stop;
 	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
+	// 1 - Load input data from CPU to GPU.
 	cudaEventRecord(start);
-	// Load input data from CPU to GPU.
 	tr_l1.load_input_gpu(img_data, size_batch);
 	cudaEventRecord(end_load);
 
-	// Allocate output memory on GPU.
+	// 2 - Allocate output memory on GPU.
 	tr_l1.allocate_output_gpu();
 
-	// Prepare the layer for execution
+	// 3 - Prepare the layer for execution
 	TransposeFullPrecLayer* gpu_copy = tr_l1.ready();
 
-
-	// Transpose kernel execution.
-	// - One block per image.
-	// - 32 threads (1 warp) per block
+	// 4 - Transpose kernel execution.
+	// NOTE: we allocate 32 threads (1 warp) per block.
 	TransposeFPLayer <<<size_batch, THREADS_PER_BLOCK>>> (gpu_copy);
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 
-
-	// Copy output from GPU to CPU.
+	// 5- Copy output from GPU to CPU.
 	float *test_output = new float[tr_l1.input_size()];
 	tr_l1.download_output_gpu(test_output);
 
 
-
+	// 6 - Compute the execution time of the various steps.
 	float ms_load, ms_kernel;
 	cudaEventElapsedTime(&ms_load, start, end_load);
 	cudaEventElapsedTime(&ms_kernel, end_load, stop);
@@ -242,7 +242,7 @@ int test_transpose_layer()
 
 
 
-	// Verify GPU output correctness.
+	// Verify the GPU output correctness.
 	bool check = true;
 	for(uint32_t n = 0; n < size_batch; n++)
 	{
@@ -269,7 +269,7 @@ int test_transpose_layer()
 			}
 		}
 	}
-	std::cout << "Check correttezza output GPU: " << (check ? "OK" : "KO") << std::endl;
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
 
 
 	return 0;
