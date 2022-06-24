@@ -20,7 +20,11 @@ gpu(NULL)
 
 void TransposeFullPrecLayer::release()
 {
+	std::cout << "Dealloc CUDA resources..." << std::endl;
+
+
 	this->size_batch = 0;
+
 
 	// Various deallocs.
 	if(this->input_gpu != NULL)
@@ -67,12 +71,6 @@ void TransposeFullPrecLayer::load_input_gpu(float* input, unsigned size_batch)
 	// Allocate and load input.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
 	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
-}
-
-void TransposeFullPrecLayer::set_input_gpu(float* input_gpu, unsigned size_batch)
-{
-	this->input_gpu = input_gpu;
-	this->size_batch = size_batch;
 }
 
 void TransposeFullPrecLayer::allocate_output_gpu()

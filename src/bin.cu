@@ -44,10 +44,15 @@ int main()
 	// return main_new();
 
 
-	// *** Unit test *** //
-	// return test_convfp_layer();
-	// return test_bnfp_layer();
-	return test_transpose_layer();
+	// *** Unit test execution *** //
+	std::cout << "Execute test units!" << std::endl;
+	test_convfp_layer();
+	test_bnfp_layer();
+	test_transpose_layer();
+	std::cout << "Test units executed!" << std::endl;
+
+
+	return 0;
 }
 
 

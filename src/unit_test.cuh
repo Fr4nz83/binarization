@@ -40,6 +40,10 @@ int test_convfp_layer()
 {
     using namespace cooperative_groups;
 
+
+	std::cout << "*** Convolution FP layer unit test *** " << std::endl;
+
+
     //=============== Device Configuration =================
 	int dev = 0;
 	cudaSetDevice(dev);
@@ -66,23 +70,21 @@ int test_convfp_layer()
 	float *filter_test = gen_filter_nchw(image_channels, num_filters);
 
 
-	// const uint32_t batch = set_images.size();
-	// uint32_t *images_test = (uint32_t*) malloc(batch * image_height * image_width * sizeof(uint32_t));
-	// uint32_t *image_labels_test = (uint32_t*) malloc(batch * sizeof(uint32_t));
-	// read_CIFAR10_raw(cifar10_dir, images_test, image_labels_test, batch);
 
-
-
-	//================ Setup Network layers =================
+	//================ Setup Network layer =================
 
 	// *** Setup initial convolutional Layer *** //
-	ConvLayer in_conv_layer = ConvLayer("InConv",
-										image_height,
-										image_width,
-										filter_height,
-										filter_width,
-										image_channels,
-										num_filters);
+	ConvLayer in_conv_layer("InConv",
+							image_height,
+							image_width,
+							filter_height,
+							filter_width,
+							image_channels,
+							num_filters);
+
+
+
+	//================ Layer execution =================
 
 	// Setup ConvLayer filters.
 	in_conv_layer.initialize_filters(filter_test);
@@ -90,8 +92,24 @@ int test_convfp_layer()
 	// Load ConvLayer input data.
 	in_conv_layer.load_input(size_batch, img_data);
 
-	// Execute ConvLayer.
+	// Allocate space for output (and residuals, if needed).
+	in_conv_layer.allocate_output_gpu();
+
+	// Perform the last actions to prepare the layer for its execution.
+	in_conv_layer.ready();
+
+	// Execute the layer.
 	in_conv_layer.execute_layer();
+
+
+
+	//================ Resource deallocation =================
+
+	delete[] img_data;
+	delete[] filter_test;
+
+
+	return 0;
 }
 
 /**
@@ -101,6 +119,11 @@ int test_bnfp_layer()
 {
     using namespace cooperative_groups;
 
+
+	std::cout << "*** Batch normalization FP layer unit test *** " << std::endl;
+
+
+
     //=============== Device Configuration =================
 	int dev = 0;
 	cudaSetDevice(dev);
@@ -109,21 +132,19 @@ int test_bnfp_layer()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t image_height = 32,
+	constexpr uint32_t size_batch = 10000,
+					   image_height = 32,
 			  	  	   image_width = 32,
-					   image_channels = 3;
+					   image_channels = 10;
 
-	// Read the image dataset.
-	std::string cifar10_dir = "../dataset/data_batch_1.bin";
-	auto set_images = ImgDatasetReader<image_height,image_width>::read_dataset_cifar10_float(cifar10_dir);
-	std::cout << "Number of images: " << set_images.size() << std::endl;
-	const uint32_t size_batch = set_images.size();
+	// Generate a random matrix representing the image dataset.
+	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
+	float *img_data = tmp.data();
+	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
 
-	// Convert the dataset into a NCHW float array.
-	float *img_data = ImgDatasetReader<image_height,image_width>::transform_dataset_nchw_float(set_images);
-	// auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
-	// float *img_data = tmp.data();
 
+
+	//=============== Set up layer =================
 
 	// Create scale and shift factors.
 	float* scale_test = new float[image_channels];
@@ -132,26 +153,51 @@ int test_bnfp_layer()
 	for(uint32_t i = 0; i < image_channels; i++) shift_test[i] = i;
 
 
+	// 1 - Instantiate the batch normalization layer.
 	BatchNormFullPrecLayer bn_l1("bn_fp1",
 								 image_width,    // Input width
 								 image_height,   // Input height
 								 image_channels, // Number of channels
 								 scale_test, 	 // Pointer to the scale factors
 								 shift_test); 	 // Pointer to the shift factors
-	BatchNormFullPrecLayer* gpu_copy = bn_l1.load_input_gpu(img_data, size_batch);
 
 
-	// Batch normalization kernel execution.
-	// - One block per image.
-	// - 32 threads (1 warp) per block
-	BNFPLayer <<<500, 32>>>(gpu_copy);
+	//=============== Kernel execution =================
+
+	// CUDA variables needed to measure the time the various operations take.
+	cudaEvent_t start, end_load, stop;
+	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
+	// 2 - Copy data from CPU to GPU.
+	cudaEventRecord(start);
+	bn_l1.load_input_gpu(img_data, size_batch);
+	cudaEventRecord(end_load);
+
+	// 3 - Prepare the layer for execution.
+	BatchNormFullPrecLayer* gpu_copy = bn_l1.ready();
+
+	// 4 - Batch normalization kernel execution.
+	BNFPLayer <<<size_batch, 32>>>(gpu_copy);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	// 5 - Retrieve the GPU output.
 	float *test_output = new float[bn_l1.input_size()];
 	bn_l1.download_output_gpu(test_output);
 
 
-	// Veify GPU output correctness.
+	// 6 - Compute the execution time of the various steps.
+	float ms_load, ms_kernel;
+	cudaEventElapsedTime(&ms_load, start, end_load);
+	cudaEventElapsedTime(&ms_kernel, end_load, stop);
+	std::cout << "Load time: " << ms_load << " ms." << std::endl;
+	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
+
+
+	// Verify GPU output correctness.
+	bool check = true;
+	constexpr float epsilon = 1e-5;
 	for(uint32_t n = 0; n < size_batch; n++)
 	{
 		const uint32_t offset_img = n * image_channels * image_height * image_width;
@@ -162,12 +208,26 @@ int test_bnfp_layer()
 			for(uint32_t i = 0; i < image_height * image_width; i++)
 			{
 				float cpu_o = scale_test[c] * img_data[offset_img + offset_color + i] + shift_test[c];
+
+				// We have an error if the absolute difference between what's computed on CPU and that computed on GPU
+				// is above a given epsilon.
 				float gpu_o = test_output[offset_img + offset_color + i];
-				if(std::abs(cpu_o - gpu_o) > 1e-5)
-					std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
+				if(std::abs(cpu_o - gpu_o) > epsilon) check = false;
+					// std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
 			}
 		}
 	}
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+
+	delete[] scale_test;
+	delete[] shift_test;
+	delete[] test_output;
+	cudaEventDestroy(start);
+	cudaEventDestroy(end_load);
+	cudaEventDestroy(stop);
+
 
 	return 0;
 }
@@ -177,15 +237,20 @@ int test_transpose_layer()
 {
     using namespace cooperative_groups;
 
+
+	std::cout << "*** FP matrix transposition layer unit test *** " << std::endl;
+
+
+
     //=============== Device Configuration =================
 	int dev = 0;
 	cudaSetDevice(dev);
 
 
 
-	//=============== Generate fake image dataset =================
+	//=============== Generate image dataset =================
 
-	constexpr uint32_t size_batch = 45000,
+	constexpr uint32_t size_batch = 4000,
 					   image_height = 32,
 			  	  	   image_width = 32,
 					   image_channels = 10,
@@ -193,6 +258,7 @@ int test_transpose_layer()
 	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
 	float* img_data = tmp.data();
 	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
+
 
 
 	//=============== Set up layer =================
@@ -216,17 +282,21 @@ int test_transpose_layer()
 	tr_l1.load_input_gpu(img_data, size_batch);
 	cudaEventRecord(end_load);
 
+
 	// 2 - Allocate output memory on GPU.
 	tr_l1.allocate_output_gpu();
 
+
 	// 3 - Prepare the layer for execution
 	TransposeFullPrecLayer* gpu_copy = tr_l1.ready();
+
 
 	// 4 - Transpose kernel execution.
 	// NOTE: we allocate 32 threads (1 warp) per block.
 	TransposeFPLayer <<<size_batch, THREADS_PER_BLOCK>>> (gpu_copy);
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
+
 
 	// 5- Copy output from GPU to CPU.
 	float *test_output = new float[tr_l1.input_size()];
@@ -270,6 +340,12 @@ int test_transpose_layer()
 		}
 	}
 	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+	delete[] test_output;
+	cudaEventDestroy(start);
+	cudaEventDestroy(end_load);
+	cudaEventDestroy(stop);
 
 
 	return 0;

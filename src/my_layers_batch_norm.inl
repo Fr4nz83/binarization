@@ -7,10 +7,10 @@ BatchNormFullPrecLayer::BatchNormFullPrecLayer(const char* name,
 											   const float* scale,
 											   const float* shift) :
 size_batch(0),
-data_gpu(NULL),
-data_width(data_width),
-data_height(data_height),
-data_channels(data_channels),
+input_gpu(NULL),
+input_width(data_width),
+input_height(data_height),
+input_channels(data_channels),
 gpu(NULL)
 {
 	strncpy(this->name, name, 8);
@@ -29,26 +29,37 @@ gpu(NULL)
 
 void BatchNormFullPrecLayer::release()
 {
+	std::cout << "Dealloc CUDA resources..." << std::endl;
+
+
+	this->size_batch = 0;
+
 	// Dealloc data space (may be NULL in case this layer is connected to other layers).
-	if(this->data_gpu != NULL)
+	if(this->input_gpu != NULL)
 	{
-		CUDA_SAFE_CALL( cudaFree(this->data_gpu) );
-		this->data_gpu = NULL;
+		CUDA_SAFE_CALL( cudaFree(this->input_gpu) );
+		this->input_gpu = NULL;
 	}
 
 	// Dealloc scale factors vector.
-	CUDA_SAFE_CALL( cudaFree(this->scale_gpu) );
-	this->scale_gpu = NULL;
+	if(this->scale_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->scale_gpu) );
+		this->scale_gpu = NULL;
+	}
 
 	// Dealloc shift factors vector.
-	CUDA_SAFE_CALL( cudaFree(this->shift_gpu) );
-	this->shift_gpu = NULL;
+	if(this->shift_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->shift_gpu) );
+		this->shift_gpu = NULL;
+	}
 }
 
 BatchNormFullPrecLayer* BatchNormFullPrecLayer::ready()
 {
 	// Dealloc data space (may be NULL in case this layer is connected to other layers).
-	if(this->data_gpu == NULL || this->input_size() == 0)
+	if(this->input_gpu == NULL || this->input_size() == 0)
 	{
 		std::cout << "Input data has not been allocated/initialized on the GPU." << std::endl;
 		exit(1);
@@ -78,19 +89,17 @@ BatchNormFullPrecLayer* BatchNormFullPrecLayer::ready()
 	return this->gpu;
 }
 
-BatchNormFullPrecLayer* BatchNormFullPrecLayer::load_input_gpu(float* input_gpu, unsigned size_batch)
+void BatchNormFullPrecLayer::load_input_gpu(float* input, unsigned size_batch)
 {
 	this->size_batch = size_batch;
 
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->data_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->data_gpu, input_gpu, this->input_bytes(), cudaMemcpyHostToDevice));
-
-	return(this->ready());
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
 }
 
 void BatchNormFullPrecLayer::download_output_gpu(float* output)
 {
-	CUDA_SAFE_CALL(cudaMemcpy(output, this->data_gpu, this->input_bytes(), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(output, this->input_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }
 
 
@@ -115,8 +124,8 @@ __global__ void BNFPLayer(BatchNormFullPrecLayer* p)
 	const uint32_t num_img_per_grid = num_blocks * warps_block;
 
 
-	const uint32_t img_size = p->data_width * p->data_height;
-	const uint32_t num_channels = p->data_channels;
+	const uint32_t img_size = p->input_width * p->input_height;
+	const uint32_t num_channels = p->input_channels;
 
 
 	// Process each color dataset-wise.
@@ -127,14 +136,14 @@ __global__ void BNFPLayer(BatchNormFullPrecLayer* p)
 		const float shift = p->shift_gpu[c];
 
 		// Each warp processes an image per loop.
-		for(uint32_t id_img = block_id * warps_block + warp_id; id_img < p->size_batch; id_img =+ num_img_per_grid)
+		for(uint32_t id_img = block_id * warps_block + warp_id; id_img < p->size_batch; id_img += num_img_per_grid)
 		{
 			// Compute the memory offset where the values associated with a given image and channel block start.
 			const uint32_t offset_img = id_img * (num_channels * img_size) + (c * img_size);
 
 			// Here threads in a warp use coalescing while reading and then updating the values.
 			for(uint32_t i = lane_id; i < img_size; i += WARPSIZE)
-				p->data_gpu[offset_img + i] = scale * p->data_gpu[offset_img + i] + shift;
+				p->input_gpu[offset_img + i] = scale * p->input_gpu[offset_img + i] + shift;
 		}
 	}
 }

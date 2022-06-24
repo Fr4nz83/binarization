@@ -26,10 +26,11 @@ public:
 	// *** FIELDS *** //
 	unsigned size_batch;
 
-	float* data_gpu;
-	unsigned data_width;
-	unsigned data_height;
-	unsigned data_channels;
+	float* input_gpu;
+
+	unsigned input_width;
+	unsigned input_height;
+	unsigned input_channels;
 
 	float* scale_gpu;
 	float* shift_gpu;
@@ -44,9 +45,9 @@ public:
 	// *** CTORS/DTOR *** //
 
 	BatchNormFullPrecLayer(const char* name,
-						   const unsigned& data_width,
-						   const unsigned& data_height,
-						   const unsigned& data_channels,
+						   const unsigned& in_width,
+						   const unsigned& in_height,
+						   const unsigned& in_channels,
 						   const float* scale,
 						   const float* shift);
 	~BatchNormFullPrecLayer(){this->release();};
@@ -56,22 +57,26 @@ public:
 	// *** METHODS *** //
 
 	void release();
+
 	BatchNormFullPrecLayer* ready();
 
-	inline int input_size() {return this->data_channels * this->data_height * this->data_width * this->size_batch;}
+	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
 	inline int output_size() {return this->input_size();}
 	inline int output_bytes() {return this->input_bytes();}
-
-	BatchNormFullPrecLayer* load_input_gpu(float* input_gpu, unsigned size_batch);
-	inline BatchNormFullPrecLayer* set_input_gpu(float* input_gpu, unsigned size_batch)
-	{
-		this->data_gpu = input_gpu;
-		this->size_batch = size_batch;
-		return this->ready();
-	}
+	inline int get_input_width() {return this->input_width;}
+	inline int get_input_heigth() {return this->input_height;}
+	inline int get_input_channels() {return this->input_channels;}
+	inline int get_output_width() {return this->input_width;}
+	inline int get_output_height() {return this->input_height;}
+	inline int get_output_channels() {return this->input_channels;}
 	inline int get_size_batch() {return this->size_batch;}
-	inline float* get_output_gpu() {return this->data_gpu;}
+
+	inline void load_input_gpu(float* input, unsigned size_batch);
+	inline void set_input_gpu(float* input_gpu, unsigned size_batch) { this->input_gpu = input_gpu; this->size_batch = size_batch;}
+
+	inline void allocate_output_gpu() {};
+	inline float* get_output_gpu() {return this->input_gpu;}
 	inline void download_output_gpu(float* output);
 };
 
@@ -123,14 +128,16 @@ public:
 	inline int output_bytes() {return this->input_bytes();}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
+	inline int get_input_channels() {return this->input_channels;}
 	inline int get_output_width() {return this->input_height;}
 	inline int get_output_height() {return this->input_width;}
+	inline int get_output_channels() {return this->input_channels;}
+	inline int get_size_batch() {return this->size_batch;}
 
 	inline void load_input_gpu(float* input, unsigned size_batch);
-	inline void set_input_gpu(float* input_gpu, unsigned size_batch);
-	inline void allocate_output_gpu();
+	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
 
-	inline int get_size_batch() {return this->size_batch;}
+	inline void allocate_output_gpu();
 	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
 };
@@ -146,7 +153,7 @@ public:
  */
 class ConvLayer
 {
-protected:
+public:
 
 	// *** FIELDS *** //
 
@@ -168,11 +175,7 @@ protected:
 	unsigned output_height;
 	unsigned output_channels;
 
-	// Batch normalization
-	float* bn_gpu;
-
 	// Convolution general properties.
-	bool apply_bn;
 	bool same_conv;
 	unsigned size_batch;
 	unsigned stride_vertical;
@@ -183,9 +186,6 @@ protected:
 	// Skip connections.
 	bool save_residual;
 	float *save_residual_gpu;
-
-	// GPU shadow.
-	// ConvLayer* gpu;
 
 	// cuDNN data structures.
 	cudnnHandle_t cudnn;
@@ -205,13 +205,8 @@ protected:
 	// *** PROTECTED METHODS *** //
 
 	bool initialize_cuDNN();
-	bool ready();
-	void release();
-	void release_cuDNN();
 
 
-
-public:
 
 	// *** PUBLIC CTORS / DTOR *** //
 
@@ -227,37 +222,46 @@ public:
 			  unsigned pad_h = 0,
 			  unsigned pad_w = 0,
 			  bool same_conv = true,
-			  bool apply_bn = false,
 			  bool save_residual = true);
-	~ConvLayer()
-	{
-		release();
-		release_cuDNN();
-	}
+	~ConvLayer() {release();}
 
 
 
 	// *** PUBLIC METHODS *** //
 
-	int batch_size() {return this->size_batch;}
-	int input_size() {return this->input_channels*this->input_height*this->input_width*this->size_batch;}
-	int input_bytes() {return input_size() * sizeof(float);}
-	int filter_size() {return this->output_channels*this->input_channels*this->filter_height*this->filter_width;}
-	int filter_bytes() {return this->filter_size() * sizeof(float);}
-	int output_size() {return this->output_channels*this->output_height*this->output_width*this->size_batch;}
-	int output_bytes() {return this->output_size() * sizeof(unsigned);}
-	int bn_size() {return this->output_channels;}
-	int bn_bytes() {return this->bn_size() * sizeof(float);}
+	bool ready();
+	void release();
 
-	// Sets and gets for input/output pointers.
-	bool load_input(const unsigned& batch_size, const float* img_data);
-	void set_input_gpu(float* input_gpu, const unsigned& batch_size) {this->input_gpu = input_gpu; this->size_batch = batch_size;}
-	float* get_output_gpu() {return this->output_gpu;}
-	float* get_residual_gpu(){return this->save_residual_gpu;}
+	bool initialize_filters(const float* filters);
+
+	inline int get_size_batch() {return this->size_batch;}
+
+	// I/O charachteristics.
+	inline int input_size() {return this->input_channels*this->input_height*this->input_width*this->size_batch;}
+	inline int input_bytes() {return input_size() * sizeof(float);}
+	inline int output_size() {return this->output_channels * this->output_height * this->output_width * this->size_batch;}
+	inline int output_bytes() {return this->output_size() * sizeof(float);}
+	inline int get_input_width() {return this->input_width;}
+	inline int get_input_heigth() {return this->input_height;}
+	inline int get_input_channels() {return this->input_channels;}
+	inline int get_output_width() {return this->output_width;}
+	inline int get_output_height() {return this->output_height;}
+	inline int get_output_channels() {return this->output_channels;}
+
+	// Filters charachteristics.
+	inline int filter_size() {return this->output_channels * this->input_channels * this->filter_height * this->filter_width;}
+	inline int filter_bytes() {return this->filter_size() * sizeof(float);}
+
+	inline bool load_input(const unsigned& batch_size, const float* img_data);
+	inline bool set_input_gpu(float* input_gpu, const unsigned& batch_size);
+
+	inline bool allocate_output_gpu();
+	inline float* get_output_gpu() {return this->output_gpu;}
 	void download_output_gpu(float* output);
-	void download_residual_gpu(float* output);
 
-	bool initialize_filters(const float* filters, const float* bn = NULL);
+	inline float* get_residual_gpu(){return this->save_residual_gpu;}
+	void download_residual_gpu(float* residual);
+
 
 	bool execute_layer();
 };
