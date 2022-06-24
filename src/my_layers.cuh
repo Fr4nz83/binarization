@@ -266,6 +266,78 @@ public:
 	bool execute_layer();
 };
 
-
 // Pull in the definitions of the methods associated with the class ConvLayer.
 #include "my_layers_conv.inl"
+
+
+
+class BinaryMultiplicationLayer
+{
+public:
+
+	// *** FIELDS *** //
+
+	unsigned size_batch;
+
+	float* input_gpu;
+	unsigned* input_bin_gpu;
+	unsigned input_width;
+	unsigned input_height;
+
+	float* output_gpu;
+
+	unsigned* weights;
+	unsigned weights_width;
+	unsigned weights_height;
+
+	// GPU shadow.
+	BinaryMultiplicationLayer* gpu;
+
+	char name[8];
+
+
+
+	// *** CTORS/DTOR *** //
+
+	BinaryMultiplicationLayer(const char* name,
+						   	  const unsigned& input_width,
+							  const unsigned& input_height,
+							  const unsigned& weigths_width,
+							  const unsigned& weights_height,
+							  const float* weights);
+	~BinaryMultiplicationLayer(){this->release();};
+
+
+
+	// *** METHODS *** //
+
+	inline void release();
+
+	inline void init_bin_weights(const float* weights);
+	BinaryMultiplicationLayer* ready();
+
+	inline int get_size_batch() {return this->size_batch;}
+
+	inline int input_size() {return this->input_height * this->input_width * this->size_batch;}
+	inline int input_bytes() {return this->input_size() * sizeof(float);}
+	inline int output_size() {return this->input_height * this->weights_width;}
+	inline int output_bytes() {return this->output_size() * sizeof(float);}
+	inline int get_input_width() {return this->input_width;}
+	inline int get_input_heigth() {return this->input_height;}
+	inline int get_output_width() {return this->weights_width;}
+	inline int get_output_height() {return this->input_height;}
+
+	inline int weights_size() {return this->weights_width * this->weights_height;}
+	inline int weight_bytes() {}
+	inline int get_weights_width() {}
+
+	inline void load_input_gpu(float* input, unsigned size_batch);
+	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
+
+	inline void allocate_output_gpu();
+	inline float* get_output_gpu() {return this->output_gpu;}
+	inline void download_output_gpu(float* output);
+};
+
+// Pull in the definitions of the methods associated with the class ConvLayer.
+#include "my_layers_binmult.inl"
