@@ -46,9 +46,10 @@ int main()
 
 	// *** Unit test execution *** //
 	std::cout << "Execute test units!" << std::endl;
-	test_convfp_layer();
-	test_bnfp_layer();
-	test_transpose_layer();
+	// test_convfp_layer();
+	// test_bnfp_layer();
+	// test_transpose_layer();
+	test_bin_multi();
 	std::cout << "Test units executed!" << std::endl;
 
 

@@ -38,9 +38,6 @@
  */
 int test_convfp_layer()
 {
-    using namespace cooperative_groups;
-
-
 	std::cout << "*** Convolution FP layer unit test *** " << std::endl;
 
 
@@ -117,9 +114,6 @@ int test_convfp_layer()
  */
 int test_bnfp_layer()
 {
-    using namespace cooperative_groups;
-
-
 	std::cout << "*** Batch normalization FP layer unit test *** " << std::endl;
 
 
@@ -235,9 +229,6 @@ int test_bnfp_layer()
 
 int test_transpose_layer()
 {
-    using namespace cooperative_groups;
-
-
 	std::cout << "*** FP matrix transposition layer unit test *** " << std::endl;
 
 
@@ -346,6 +337,117 @@ int test_transpose_layer()
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
 	cudaEventDestroy(stop);
+
+
+	return 0;
+}
+
+/**
+ * @brief Full precision batch normalization unit test.
+ */
+int test_bin_multi()
+{
+	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
+
+
+
+    //=============== Device Configuration =================
+	int dev = 0;
+	cudaSetDevice(dev);
+
+
+
+	//=============== Read image dataset =================
+
+	constexpr uint32_t size_batch = 1,
+					   image_height = 32,
+			  	  	   image_width = 32,
+					   image_channels = 1;
+
+	// Generate a random matrix representing the image dataset.
+	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
+	float *img_data = tmp.data();
+	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	//=============== Set up layer =================
+
+	// TODO: create fake weights.
+
+
+	// 1 - Instantiate the batch normalization layer.
+	/*BatchNormFullPrecLayer bn_l1("bn_fp1",
+								 image_width,    // Input width
+								 image_height,   // Input height
+								 image_channels, // Number of channels
+								 scale_test, 	 // Pointer to the scale factors
+								 shift_test); 	 // Pointer to the shift factors
+
+
+	//=============== Kernel execution =================
+
+	// CUDA variables needed to measure the time the various operations take.
+	cudaEvent_t start, end_load, stop;
+	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
+
+
+	// 2 - Copy data from CPU to GPU.
+	cudaEventRecord(start);
+	bn_l1.load_input_gpu(img_data, size_batch);
+	cudaEventRecord(end_load);
+
+	// 3 - Prepare the layer for execution.
+	BatchNormFullPrecLayer* gpu_copy = bn_l1.ready();
+
+	// 4 - Batch normalization kernel execution.
+	BNFPLayer <<<size_batch, 32>>>(gpu_copy);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	// 5 - Retrieve the GPU output.
+	float *test_output = new float[bn_l1.input_size()];
+	bn_l1.download_output_gpu(test_output);
+
+
+	// 6 - Compute the execution time of the various steps.
+	float ms_load, ms_kernel;
+	cudaEventElapsedTime(&ms_load, start, end_load);
+	cudaEventElapsedTime(&ms_kernel, end_load, stop);
+	std::cout << "Load time: " << ms_load << " ms." << std::endl;
+	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
+
+
+	// Verify GPU output correctness.
+	bool check = true;
+	constexpr float epsilon = 1e-5;
+	for(uint32_t n = 0; n < size_batch; n++)
+	{
+		const uint32_t offset_img = n * image_channels * image_height * image_width;
+		for(uint32_t c = 0; c < image_channels; c++)
+		{
+			const uint32_t offset_color = (image_height * image_width) * c;
+
+			for(uint32_t i = 0; i < image_height * image_width; i++)
+			{
+				float cpu_o = scale_test[c] * img_data[offset_img + offset_color + i] + shift_test[c];
+
+				// We have an error if the absolute difference between what's computed on CPU and that computed on GPU
+				// is above a given epsilon.
+				float gpu_o = test_output[offset_img + offset_color + i];
+				if(std::abs(cpu_o - gpu_o) > epsilon) check = false;
+					// std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
+			}
+		}
+	}
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+
+	delete[] test_output;
+	cudaEventDestroy(start);
+	cudaEventDestroy(end_load);
+	cudaEventDestroy(stop);*/
 
 
 	return 0;

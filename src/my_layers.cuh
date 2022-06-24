@@ -9,7 +9,6 @@
 
 
 // *** INCLUDES *** //
-
 #include <cudnn.h>
 #include "sbnn32_param.h"
 
@@ -271,24 +270,31 @@ public:
 
 
 
+// *** MACROS *** //
+#define CEIL(X) (((X) + BITWIDTH - 1) >> LOG_BITWIDTH) // Equivalente a ceil(X/32)
+#define FEIL(X) ((((X) + BITWIDTH - 1) >> LOG_BITWIDTH) << LOG_BITWIDTH) // Equivalente a ceil(X/32)*32 (ovvero, il multiplo di 32 >= X)
+
 class BinaryMultiplicationLayer
 {
 public:
 
-	// *** FIELDS *** //
+	// *** PROTECTED FIELDS *** //
 
 	unsigned size_batch;
 
+	// Input fields.
 	float* input_gpu;
 	unsigned* input_bin_gpu;
 	unsigned input_width;
 	unsigned input_height;
 
-	float* output_gpu;
-
-	unsigned* weights;
+	// Weights fields.
+	unsigned* weights_gpu;
 	unsigned weights_width;
 	unsigned weights_height;
+
+	// Output fields.
+	float* output_gpu;
 
 	// GPU shadow.
 	BinaryMultiplicationLayer* gpu;
@@ -328,8 +334,11 @@ public:
 	inline int get_output_height() {return this->input_height;}
 
 	inline int weights_size() {return this->weights_width * this->weights_height;}
-	inline int weight_bytes() {}
-	inline int get_weights_width() {}
+	inline int weight_bytes() {return this->weights_size() * sizeof(float);}
+	int weight_bit_size() {return CEIL(this->weights_height) * FEIL(this->weights_width);}
+	int weight_bit_bytes() {return weight_bit_size() * sizeof(unsigned);}
+	inline int get_weights_width() {return this->weights_width;}
+	inline int get_weights_height() {return this->weights_height;}
 
 	inline void load_input_gpu(float* input, unsigned size_batch);
 	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
