@@ -309,7 +309,6 @@ public:
 						   	  const unsigned& input_width,
 							  const unsigned& input_height,
 							  const unsigned& weigths_width,
-							  const unsigned& weights_height,
 							  const float* weights);
 	~BinaryMultiplicationLayer(){this->release();};
 
@@ -346,6 +345,8 @@ public:
 	inline void allocate_output_gpu();
 	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
+
+	inline void execute();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.

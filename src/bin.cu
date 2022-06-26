@@ -17,8 +17,6 @@
 #include <thrust/device_vector.h>
 
 #include "utility.h"
-#include "sbnn32_param.h"
-#include "sbnn32.cuh"
 #include "data.h"
 #include "dataset_reader.h"
 
@@ -72,11 +70,11 @@ int main_new()
     //=============== Read image dataset =================
 
     constexpr uint32_t image_height = 32,
-    		  image_width = 32,
-			  image_channels = 3,
-			  filter_height = 3,
-			  filter_width = 3,
-			  num_filters = 10;
+					   image_width = 32,
+					   image_channels = 3,
+					   filter_height = 3,
+					   filter_width = 3,
+					   num_filters = 10;
 
     // Read the image dataset.
     std::string cifar10_dir = "../dataset/data_batch_1.bin";

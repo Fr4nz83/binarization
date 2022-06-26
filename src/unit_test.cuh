@@ -362,33 +362,38 @@ int test_bin_multi()
 	constexpr uint32_t size_batch = 1,
 					   image_height = 32,
 			  	  	   image_width = 32,
+					   weights_width = 192,
 					   image_channels = 1;
 
 	// Generate a random matrix representing the image dataset.
-	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
-	float *img_data = tmp.data();
-	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
+	auto tmp_img = gen_matrix(size_batch * image_channels, image_height, image_width);
+	float *img_data = tmp_img.data();
+	std::cout << "Size input: " << tmp_img.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	//=============== Read weigths =================
+
+	auto tmp_w = gen_matrix(1, image_width, weights_width);
+	float *weights_data = tmp_w.data();
 
 
 
 	//=============== Set up layer =================
 
-	// TODO: create fake weights.
-
 
 	// 1 - Instantiate the batch normalization layer.
-	/*BatchNormFullPrecLayer bn_l1("bn_fp1",
-								 image_width,    // Input width
-								 image_height,   // Input height
-								 image_channels, // Number of channels
-								 scale_test, 	 // Pointer to the scale factors
-								 shift_test); 	 // Pointer to the shift factors
+	BinaryMultiplicationLayer bn_l1("mb_1",
+								 	image_width,    // Input width
+									image_height,   // Input height
+									weights_width,  // Number of channels
+									weights_data); 	// Pointer to the wheigts
 
 
 	//=============== Kernel execution =================
 
 	// CUDA variables needed to measure the time the various operations take.
-	cudaEvent_t start, end_load, stop;
+	/*cudaEvent_t start, end_load, stop;
 	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
