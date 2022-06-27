@@ -87,6 +87,7 @@ void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const flo
 
 	// Allocate the memory required by the binarized weights.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->weights_gpu), this->weight_bit_bytes()));
+	std::cout << "Memory required by the binarized weights: " << this->weight_bit_bytes() << " bytes." << std::endl;
 
 
 	// Binarize the float weights.
@@ -111,27 +112,33 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 	// Dealloc data space (may be NULL in case this layer is connected to other layers).
 	if(this->input_gpu == NULL || this->input_size() == 0)
 	{
-		std::cout << "Input data has not been allocated/initialized on the GPU." << std::endl;
+		std::cout << "ERROR: Input data has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	if(this->input_bin_gpu == NULL || this->input_bit_size() == 0)
+	{
+		std::cout << "ERROR: Memory for binarized input has not been allocated!" << std::endl;
 		exit(1);
 	}
 
 	if(this->output_gpu == NULL || this->output_size() == 0)
 	{
-		std::cout << "Output has not been allocated/initialized on the GPU." << std::endl;
+		std::cout << "ERROR: Output has not been allocated/initialized on the GPU." << std::endl;
 		exit(1);
 	}
 
 	// Dealloc scale factors vector.
 	if(this->weights_gpu == NULL)
 	{
-		std::cout << "Weights have not been copied to the GPU." << std::endl;
+		std::cout << "ERROR: Weights have not been copied to the GPU." << std::endl;
 		exit(1);
 	}
 
 	// Dealloc shift factors vector.
 	if(this->bias_gpu == NULL)
 	{
-		std::cout << "Biases have not been copied to the GPU." << std::endl;
+		std::cout << "ERROR: Biases have not been copied to the GPU." << std::endl;
 		exit(1);
 	}
 
@@ -153,8 +160,19 @@ void BinaryMultiplicationLayer::load_input_gpu(float* input, unsigned input_heig
 	if(this->input_gpu != NULL)
 		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
 
+	// Allocate the memory required by the FP input, and then copy the input data from CPU to GPU.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
 	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
+	std::cout << "Memory required by the FP input: " << this->input_bytes() << " bytes." << std::endl;
+
+	// Check if we need to reset the state of the binarized input.
+	if(this->input_bin_gpu != NULL)
+		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
+
+	// Allocate the memory required by the binarized input, and then set the initial state of its elements to 0.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_bin_gpu), this->input_bit_bytes()));
+	CUDA_SAFE_CALL(cudaMemset(this->input_bin_gpu, 0, this->input_bit_bytes()));
+	std::cout << "Memory required by the binarized input: " << this->input_bit_bytes() << " bytes." << std::endl;
 }
 
 void BinaryMultiplicationLayer::allocate_output_gpu()
@@ -267,8 +285,9 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
             if (laneid == i) val = r0;
         }
 
-        // Finally every active warp writes out in global memory their bit-row.
-        // gdx => number of ints required to store a whole bit-column.
+        // Finally every active warp writes out in global memory their block of 32 32-bit-rows.
+        // Overall, the blocks are arranged in column-major format.
+        // NOTE: gdx => number of ints required to store a whole bit-column.
         if (laneid < (p->input_height) * (p->input_width))
             p->input_bin_gpu[by*gdx*32 + bx*32 + laneid] = val;
     }
@@ -285,6 +304,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
     GET_LANEID;
     const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
     const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
+
 
     // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
     // NOTE: it seems here that every thread block has 32 warps (1024 threads).
@@ -324,6 +344,9 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
             	// unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
 				// Cm[j] += __popc(r1 ^ r2);
             }
+
+            // TODO: Arrivati a questo punto, col metodo alternativo si puo' applicare GELU con successiva scrittura
+            // output in row-major con coalescing...
         }
 
 

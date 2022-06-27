@@ -390,11 +390,13 @@ int test_bin_multi()
 
 
 	// 1 - Instantiate the batch normalization layer.
+	std::cout << "Initializing the FC layer (with binary multiplication and FP output)..." << std::endl;
 	BinaryMultiplicationLayer bm_l1("mb_1",
 									weights_height, // Input features
 									weights_width,  // Activation units
 									weights_data,   // Pointer to the weights array
 									bias_data); 	// Pointer to the bias vector
+
 
 
 	//=============== Kernel execution =================
@@ -406,7 +408,8 @@ int test_bin_multi()
 
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	cudaEventRecord(start);
-	bm_l1.load_input_gpu(img_data, input_height);
+	std::cout << "Initializing the input and output of the layer..." << std::endl;
+	bm_l1.load_input_gpu(img_data, input_height); // TODO: qualcosa non va nel calcolo dei byte per l'input binarizzato...verificare.
 	bm_l1.allocate_output_gpu();
 	cudaEventRecord(end_load);
 
