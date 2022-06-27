@@ -10,18 +10,16 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p);
 // *** CTORS/DTOR DEFINITIONS *** //
 
 BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
-													 const unsigned& input_width,
-													 const unsigned& input_height,
-													 const unsigned& weigths_width,
+													 const unsigned& weigths_height, // This corresponds to number of features.
+													 const unsigned& weigths_width,  // This corresponds to the number of hidden units.
 													 const float* weights) :
-size_batch(0),
 input_gpu(NULL),
 input_bin_gpu(NULL),
-input_width(input_width),
-input_height(input_height),
+input_width(weigths_height),
+input_height(0),
 output_gpu(NULL),
 weights_width(weigths_width),
-weights_height(input_width),
+weights_height(weigths_height),
 weights_gpu(NULL),
 gpu(NULL)
 {
@@ -136,7 +134,7 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
     // 				   blocks of binarized valjes.
     // 				   Each stripe has a size of "32 x ceil(width/32)" 32 bit-columns. Each stripe is made of "ceil(width/32)" blocks, with each block
     //				   containing 32x32 binarized values.
-    if (laneid < A_height * A_width) // TODO: this if can be removed.
+    if (laneid < A_height * A_width) // TODO: this check should be safely removable.
         B[bx*(gridDim.y*32) + by*32 + laneid] = Bval;
 }
 
@@ -196,14 +194,73 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
  * @note The kernel assumes that the dataset is stored in NCHW format.
  */
 // TODO: this kernel will have to be a __device__ function at some point.
-__global__ void Mat_BinMul_Layer(BinaryMultiplicationLayer* p)
+__global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 {
-/*	constexpr uint8_t WARPSIZE = 32;
+    GET_LANEID;
+    const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
+    const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
 
-	const uint8_t warp_id = threadIdx.x / WARPSIZE;
-	const uint8_t lane_id = threadIdx.x % WARPSIZE;
-	const uint32_t warps_block = blockDim.x / WARPSIZE;
-	const uint32_t& block_id = blockIdx.x;
-	const uint32_t& num_blocks = gridDim.x;
-	const uint32_t num_img_per_grid = num_blocks * warps_block;*/
+    // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
+    // NOTE: it seems here that every thread block has 32 warps (1024 threads).
+    for (int bid = blockIdx.x*32 + warpid; bid < gdx*gdy; bid += gridDim.x*32)
+    {
+        unsigned bx = bid / gdy; // Block index on the input height dimension.
+        unsigned by = bid % gdy; // Block index on the weights width dimension.
+
+
+        const unsigned* input_sub = &(p->input_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
+        												    // containing 32 32-bit-rows.
+        const unsigned* weight_sub = &(p->weights_gpu[by*32]); // RECALL: Weight matrix is made of row-major arranged blocks (hence the by),
+        													   // each containing 32 32-bit-columns.
+
+
+        // Here we perform a warp-level vector-vector binary multiplication using the
+        // common dimension between the input and weight matrices.
+        register int Cm[32] = {0};
+        for (int i=0; (i*32) < (p->input_width); i++)
+        {
+            unsigned r0 = input_sub[i*32*gdx + laneid];
+            unsigned r1 = weight_sub[i*32*gdy + laneid];
+
+            #pragma unroll
+            for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
+            {
+            	// Original (every thread has in charge a bit-row of the input matrix)...
+            	// NOTE: this forces to write the output in full-precision in row-major format without coalescing...
+            	//		 or using the column-major format (which corresponds to the transposed output, which may be desirable depending
+            	//	     on the situation).
+                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                Cm[j] += __popc(r0 ^ r2);
+
+
+            	// Modified (every thread has in charge a bit-column of the weight matrix)...
+                // This allows to write the output matrix in row-major format using coalescing.
+            	// unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
+				// Cm[j] += __popc(r1 ^ r2);
+            }
+        }
+
+
+
+        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built, in full precision.
+        unsigned* output_sub = &(p->output_gpu[by * p->input_height + bx * 32]);
+
+
+
+        // Parte di binarizzazione (con batch normalization).
+        /*unsigned C = 0;
+        if (bx*32+laneid < (p->input_height))
+        {
+            for (int i=0; i<32; i++)
+            {
+                C = C+C; // This corresponds to a left shift.
+                if(by*32+i < (p->weights_width))
+                {
+                    float t = ((float)p->input_width) - 2 * (float)Cm[i];
+                    C += ((t < (p->bn_gpu[by*32+i])) ? 0 : 1);
+                }
+            }
+        }
+        output_sub[laneid] = C;*/
+    }
 }

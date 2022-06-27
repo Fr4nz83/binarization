@@ -1,9 +1,3 @@
-/** @file mnist_mlp.cu
- *  @brief A 4-layer MLP for MNIST.
- *  @author Ang Li (PNNL)
- *
-*/
-
 #include <stdio.h>
 #include <assert.h>
 #include <iostream>

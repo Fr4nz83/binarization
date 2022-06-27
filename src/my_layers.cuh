@@ -280,18 +280,19 @@ public:
 
 	// *** PROTECTED FIELDS *** //
 
-	unsigned size_batch;
-
 	// Input fields.
 	float* input_gpu;
 	unsigned* input_bin_gpu;
-	unsigned input_width;
 	unsigned input_height;
+	unsigned input_width;
 
 	// Weights fields.
 	unsigned* weights_gpu;
-	unsigned weights_width;
-	unsigned weights_height;
+	unsigned weights_height; // Number of features in the input.
+	unsigned weights_width; // Number of activation units.
+
+	// Bias.
+	float* bias;
 
 	// Output fields.
 	float* output_gpu;
@@ -306,8 +307,7 @@ public:
 	// *** CTORS/DTOR *** //
 
 	BinaryMultiplicationLayer(const char* name,
-						   	  const unsigned& input_width,
-							  const unsigned& input_height,
+						   	  const unsigned& weigths_height,
 							  const unsigned& weigths_width,
 							  const float* weights);
 	~BinaryMultiplicationLayer(){this->release();};
@@ -318,17 +318,18 @@ public:
 
 	inline void release();
 
-	inline void init_bin_weights(const float* weights);
+	inline void init_bin_weights(const float* weights, const float* bias);
 	BinaryMultiplicationLayer* ready();
 
-	inline int get_size_batch() {return this->size_batch;}
-
-	inline int input_size() {return this->input_height * this->input_width * this->size_batch;}
+	inline int input_size() {return this->input_height * this->input_width;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int output_size() {return this->input_height * this->weights_width;}
-	inline int output_bytes() {return this->output_size() * sizeof(float);}
+    int input_bit_size() {return FEIL(this->input_height) * CEIL(this->input_width);}
+    int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
+
+	inline int output_size() {return this->input_height * this->weights_width;}
+	inline int output_bytes() {return this->output_size() * sizeof(float);}
 	inline int get_output_width() {return this->weights_width;}
 	inline int get_output_height() {return this->input_height;}
 
@@ -339,8 +340,8 @@ public:
 	inline int get_weights_width() {return this->weights_width;}
 	inline int get_weights_height() {return this->weights_height;}
 
-	inline void load_input_gpu(float* input, unsigned size_batch);
-	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
+	inline void load_input_gpu(float* input, unsigned input_height);
+	inline void set_input_gpu(float* input_gpu, unsigned input_height) {this->input_gpu = input_gpu; this->input_height = input_height;}
 
 	inline void allocate_output_gpu();
 	inline float* get_output_gpu() {return this->output_gpu;}
