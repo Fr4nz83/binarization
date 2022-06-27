@@ -359,14 +359,12 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t size_batch = 1,
-					   image_height = 32,
-			  	  	   image_width = 32,
-					   weights_width = 192,
-					   image_channels = 1;
+	constexpr uint32_t input_height = 1,    // # of input entries.
+					   weights_height = 32, // # of features
+					   weights_width = 32; // # Activation units
 
 	// Generate a random matrix representing the image dataset.
-	auto tmp_img = gen_matrix(size_batch * image_channels, image_height, image_width);
+	auto tmp_img = gen_matrix(input_height, weights_height);
 	float *img_data = tmp_img.data();
 	std::cout << "Size input: " << tmp_img.size() * sizeof(float) << " bytes" << std::endl;
 
@@ -374,8 +372,17 @@ int test_bin_multi()
 
 	//=============== Read weigths =================
 
-	auto tmp_w = gen_matrix(1, image_width, weights_width);
+	auto tmp_w = gen_matrix(weights_height, weights_width);
 	float *weights_data = tmp_w.data();
+	std::cout << "Size weights: " << tmp_w.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	//=============== Read biases =================
+
+	auto tmp_b = gen_matrix(1, weights_width);
+	float *bias_data = tmp_b.data();
+	std::cout << "Size bias: " << tmp_b.size() * sizeof(float) << " bytes" << std::endl;
 
 
 
@@ -383,35 +390,33 @@ int test_bin_multi()
 
 
 	// 1 - Instantiate the batch normalization layer.
-	BinaryMultiplicationLayer bn_l1("mb_1",
-								 	image_width,    // Input width
-									image_height,   // Input height
-									weights_width,  // Number of channels
-									weights_data); 	// Pointer to the wheigts
+	BinaryMultiplicationLayer bm_l1("mb_1",
+									weights_height, // Input features
+									weights_width,  // Activation units
+									weights_data,   // Pointer to the weights array
+									bias_data); 	// Pointer to the bias vector
 
 
 	//=============== Kernel execution =================
 
 	// CUDA variables needed to measure the time the various operations take.
-	/*cudaEvent_t start, end_load, stop;
+	cudaEvent_t start, end_load, stop;
 	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
-	// 2 - Copy data from CPU to GPU.
+	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	cudaEventRecord(start);
-	bn_l1.load_input_gpu(img_data, size_batch);
+	bm_l1.load_input_gpu(img_data, input_height);
+	bm_l1.allocate_output_gpu();
 	cudaEventRecord(end_load);
 
-	// 3 - Prepare the layer for execution.
-	BatchNormFullPrecLayer* gpu_copy = bn_l1.ready();
-
-	// 4 - Batch normalization kernel execution.
-	BNFPLayer <<<size_batch, 32>>>(gpu_copy);
+	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
+	bm_l1.execute();
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 
 	// 5 - Retrieve the GPU output.
-	float *test_output = new float[bn_l1.input_size()];
+	/*float *test_output = new float[bn_l1.input_size()];
 	bn_l1.download_output_gpu(test_output);
 
 

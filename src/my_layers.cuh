@@ -292,7 +292,7 @@ public:
 	unsigned weights_width; // Number of activation units.
 
 	// Bias.
-	float* bias;
+	float* bias_gpu;
 
 	// Output fields.
 	float* output_gpu;
@@ -309,7 +309,8 @@ public:
 	BinaryMultiplicationLayer(const char* name,
 						   	  const unsigned& weigths_height,
 							  const unsigned& weigths_width,
-							  const float* weights);
+							  const float* weights,
+							  const float* bias);
 	~BinaryMultiplicationLayer(){this->release();};
 
 

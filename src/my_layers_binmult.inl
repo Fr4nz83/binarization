@@ -12,22 +12,24 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p);
 BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
 													 const unsigned& weigths_height, // This corresponds to number of features.
 													 const unsigned& weigths_width,  // This corresponds to the number of hidden units.
-													 const float* weights) :
+													 const float* weights,
+													 const float* bias) :
 input_gpu(NULL),
 input_bin_gpu(NULL),
-input_width(weigths_height),
 input_height(0),
-output_gpu(NULL),
-weights_width(weigths_width),
-weights_height(weigths_height),
+input_width(weigths_height),
 weights_gpu(NULL),
+weights_height(weigths_height),
+weights_width(weigths_width),
+bias_gpu(NULL),
+output_gpu(NULL),
 gpu(NULL)
 {
 	strncpy(this->name, name, 8);
 	std::cout << "Invoking constructor for " << this->name << std::endl;
 
 	// Load and binarize the weights on GPU.
-	this->init_bin_weights(weights);
+	this->init_bin_weights(weights, bias);
 }
 
 
@@ -39,7 +41,8 @@ void BinaryMultiplicationLayer::release()
 	std::cout << this->name << ": dealloc CUDA resources..." << std::endl;
 
 
-	this->size_batch = 0;
+	this->input_height = 0;
+
 
 	// Dealloc data space (may be NULL in case this layer is connected to other layers).
 	if(this->input_gpu != NULL)
@@ -60,6 +63,12 @@ void BinaryMultiplicationLayer::release()
 		this->weights_gpu = NULL;
 	}
 
+	if(this->bias_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->bias_gpu) );
+		this->bias_gpu = NULL;
+	}
+
 	if(this->output_gpu != NULL)
 	{
 		CUDA_SAFE_CALL( cudaFree(this->output_gpu) );
@@ -67,7 +76,7 @@ void BinaryMultiplicationLayer::release()
 	}
 }
 
-void BinaryMultiplicationLayer::init_bin_weights(const float* weights)
+void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const float* bias)
 {
 	float* tmp_fp_weights_gpu;
 
@@ -90,7 +99,84 @@ void BinaryMultiplicationLayer::init_bin_weights(const float* weights)
 
 	// Release the device memory temporarily used to binarize the float weights.
 	CUDA_SAFE_CALL(cudaFree(tmp_fp_weights_gpu));
+
+
+	// Copy the bias info to the GPU.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->bias_gpu), this->weights_width * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->bias_gpu, bias, this->weights_width * sizeof(float), cudaMemcpyHostToDevice));
 }
+
+BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
+{
+	// Dealloc data space (may be NULL in case this layer is connected to other layers).
+	if(this->input_gpu == NULL || this->input_size() == 0)
+	{
+		std::cout << "Input data has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	if(this->output_gpu == NULL || this->output_size() == 0)
+	{
+		std::cout << "Output has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	// Dealloc scale factors vector.
+	if(this->weights_gpu == NULL)
+	{
+		std::cout << "Weights have not been copied to the GPU." << std::endl;
+		exit(1);
+	}
+
+	// Dealloc shift factors vector.
+	if(this->bias_gpu == NULL)
+	{
+		std::cout << "Biases have not been copied to the GPU." << std::endl;
+		exit(1);
+	}
+
+
+	// Allocate shadow copy of this instance on GPU.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->gpu), sizeof(BinaryMultiplicationLayer)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->gpu, this, sizeof(BinaryMultiplicationLayer), cudaMemcpyHostToDevice));
+
+
+	// Return the pointer to the shadow copy (to be used within a kernel).
+	return this->gpu;
+}
+
+void BinaryMultiplicationLayer::load_input_gpu(float* input, unsigned input_height)
+{
+	this->input_height = input_height;
+
+	// Check if we need to reset the state of the input.
+	if(this->input_gpu != NULL)
+		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
+
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
+}
+
+void BinaryMultiplicationLayer::allocate_output_gpu()
+{
+	// Allocate space for output.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->output_bytes()));
+}
+
+void BinaryMultiplicationLayer::download_output_gpu(float* output)
+{
+	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+}
+
+void BinaryMultiplicationLayer::execute()
+{
+	// 3 - Prepare the layer for execution.
+	BinaryMultiplicationLayer* gpu_copy = this->ready();
+
+	// 4 - Batch normalization kernel execution.
+	Input_Binarization <<<100, 1024>>> (gpu_copy);
+}
+
 
 
 // *** CUDA KERNELS *** //
@@ -184,7 +270,7 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
         // Finally every active warp writes out in global memory their bit-row.
         // gdx => number of ints required to store a whole bit-column.
         if (laneid < (p->input_height) * (p->input_width))
-            p->output_gpu[by*gdx*32 + bx*32 + laneid] = val;
+            p->input_bin_gpu[by*gdx*32 + bx*32 + laneid] = val;
     }
 }
 
@@ -208,7 +294,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         unsigned by = bid % gdy; // Block index on the weights width dimension.
 
 
-        const unsigned* input_sub = &(p->input_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
+        const unsigned* input_sub = &(p->input_bin_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
         												    // containing 32 32-bit-rows.
         const unsigned* weight_sub = &(p->weights_gpu[by*32]); // RECALL: Weight matrix is made of row-major arranged blocks (hence the by),
         													   // each containing 32 32-bit-columns.
@@ -243,7 +329,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 
 
         // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built, in full precision.
-        unsigned* output_sub = &(p->output_gpu[by * p->input_height + bx * 32]);
+        float* output_sub = &(p->output_gpu[by * p->input_height + bx * 32]);
 
 
 
