@@ -77,3 +77,18 @@ float* gen_filter_nchw(const uint32_t& num_in_channels,
 
 	return(kernel_ptr);
 }
+
+void transform_array_ones(const float* mat, const uint32_t& size, float* res)
+{
+	for(uint32_t i = 0; i < size; i++) res[i] = mat[i] >= 0 ? 1 : -1;
+}
+
+void matrix_multiplication(const float* mat_1, const float* mat_2,
+						   const uint32_t& r1, const uint32_t& c2, const uint32_t& d,
+						   float* res)
+{
+	for (uint32_t i = 0; i < r1; ++i)
+		for (uint32_t j = 0; j < c2; ++j)
+			for (uint32_t k = 0; k < d; ++k)
+				res[i * c2 + j] += mat_1[i * d + k] * mat_2[k * c2 + j];
+}

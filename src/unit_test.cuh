@@ -432,6 +432,49 @@ int test_bin_multi()
 	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
 
 
+
+
+
+
+	float *img_data_trans = new float[tmp_img.size()];
+	transform_array_ones(img_data, tmp_img.size(), img_data_trans);
+
+	for(uint32_t i = 0; i < tmp_img.size(); i++)
+		std::cout << img_data[i] << " ";
+	std::cout << std::endl;
+
+	for(uint32_t i = 0; i < tmp_img.size(); i++)
+		std::cout << img_data_trans[i] << " ";
+	std::cout << std::endl;
+
+
+
+	float *weights_trans = new float[tmp_w.size()];
+	transform_array_ones(weights_data, tmp_w.size(), weights_trans);
+
+	for(uint32_t i = 0; i < tmp_w.size(); i++)
+		std::cout << weights_data[i] << " ";
+	std::cout << std::endl;
+
+	for(uint32_t i = 0; i < tmp_w.size(); i++)
+		std::cout << weights_trans[i] << " ";
+	std::cout << std::endl;
+
+
+	float *res_cpu = new float[input_height * weights_width];
+	matrix_multiplication(img_data_trans, weights_trans,
+						  input_height, weights_width, weights_height,
+						  res_cpu);
+
+	for(uint32_t i = 0; i < input_height * weights_width; i++)
+		std::cout << res_cpu[i] << " ";
+	std::cout << std::endl;
+
+	for(uint32_t i = 0; i < input_height * weights_width; i++)
+		std::cout << test_output[i] << " ";
+	std::cout << std::endl;
+
+
 	// Verify GPU output correctness.
 	/* bool check = true;
 	constexpr float epsilon = 1e-5;
