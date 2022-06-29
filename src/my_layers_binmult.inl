@@ -2,8 +2,8 @@
 
 __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 							 const int A_height, const int A_width);
-
 __global__ void Input_Binarization(BinaryMultiplicationLayer *p);
+__global__ void Mat_BinMul(BinaryMultiplicationLayer* p);
 
 
 
@@ -191,8 +191,14 @@ void BinaryMultiplicationLayer::execute()
 	// 3 - Prepare the layer for execution.
 	BinaryMultiplicationLayer* gpu_copy = this->ready();
 
-	// 4 - Batch normalization kernel execution.
+	// 4 - Input binarization kernel execution.
+	// NOTE: this kernel currently requires each block to have 32 warps.
+	std::cout << "Binarizing output..." << std::endl;
 	Input_Binarization <<<100, 1024>>> (gpu_copy);
+
+	// 5 - Input binarization kernel execution.
+	std::cout << "Binary matrix multiplication..." << std::endl;
+	Mat_BinMul <<<100, 1024>>> (gpu_copy);
 }
 
 
@@ -252,6 +258,11 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 {
     GET_LANEID; // Recover warpid and laneid;
+    // constexpr uint32_t WARP_SIZE = 32;
+    // const uint32_t& threads_per_block = blockDim.x;
+    // const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
+
+
     const int gdx = (CEIL(p->input_height));
     const int gdy = (CEIL(p->input_width));
 
@@ -307,7 +318,8 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 
 
     // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
-    // NOTE: it seems here that every thread block has 32 warps (1024 threads).
+    // NOTE: it seems here that every thread block has 32 warps (1024 threads). This constraint can be removed by computing
+    // the number of warps per block, and then substituting the 32 in this for loop.
     for (int bid = blockIdx.x*32 + warpid; bid < gdx*gdy; bid += gridDim.x*32)
     {
         unsigned bx = bid / gdy; // Block index on the input height dimension.
@@ -325,7 +337,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         register int Cm[32] = {0};
         for (int i=0; (i*32) < (p->input_width); i++)
         {
-            unsigned r0 = input_sub[i*32*gdx + laneid];
+            unsigned r0 = input_sub[i*32*gdx + laneid]; // Ogni thread legge una 32-bit sub-row
             unsigned r1 = weight_sub[i*32*gdy + laneid];
 
             #pragma unroll
@@ -335,14 +347,14 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
             	// NOTE: this forces to write the output in full-precision in row-major format without coalescing...
             	//		 or using the column-major format (which corresponds to the transposed output, which may be desirable depending
             	//	     on the situation).
-                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
-                Cm[j] += __popc(r0 ^ r2);
+                // unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                // Cm[j] += __popc(r0 ^ r2);
 
 
             	// Modified (every thread has in charge a bit-column of the weight matrix)...
                 // This allows to write the output matrix in row-major format using coalescing.
-            	// unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
-				// Cm[j] += __popc(r1 ^ r2);
+            	unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
+				Cm[j] += __popc(r1 ^ r2);
             }
 
             // TODO: Arrivati a questo punto, col metodo alternativo si puo' applicare GELU con successiva scrittura
@@ -350,9 +362,25 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         }
 
 
+        // Compute the final results by applying the binary multiplication formula for -1/1 on the "popc(xor)" results that have been accumulated.
+		#pragma unroll
+        for(uint8_t i = 0; i < 32; i++) Cm[i] = p->input_width - 2 * Cm[i];
 
-        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built, in full precision.
-        float* output_sub = &(p->output_gpu[by * p->input_height + bx * 32]);
+
+        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built,
+        // in full precision and row-major format.
+        const uint32_t start_row = bx * 32;
+        const uint32_t end_row = min(bx + 32, p->input_height);
+        const uint32_t start_column = by * 32;
+        for(uint32_t row = start_row; row < end_row; row++)
+        {
+            float* output_sub = &(p->output_gpu[row * p->input_height + start_column]);
+        	if(start_column + laneid < (p->weights_width))
+        	{
+        		// TODO: here we can apply the bias and the GELU...
+        		output_sub[laneid] = Cm[row - start_row];
+        	}
+        }
 
 
 

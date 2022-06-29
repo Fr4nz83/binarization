@@ -359,12 +359,12 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1,    // # of input entries.
-					   weights_height = 32, // # of features
-					   weights_width = 32; // # Activation units
+	constexpr uint32_t input_height = 1,	// # of input entries.
+					   weights_height = 3,	// # of features
+					   weights_width = 4;	// # Activation units
 
 	// Generate a random matrix representing the image dataset.
-	auto tmp_img = gen_matrix(input_height, weights_height);
+	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
 	float *img_data = tmp_img.data();
 	std::cout << "Size input: " << tmp_img.size() * sizeof(float) << " bytes" << std::endl;
 
@@ -372,7 +372,7 @@ int test_bin_multi()
 
 	//=============== Read weigths =================
 
-	auto tmp_w = gen_matrix(weights_height, weights_width);
+	std::vector<float> tmp_w = gen_matrix(weights_height, weights_width);
 	float *weights_data = tmp_w.data();
 	std::cout << "Size weights: " << tmp_w.size() * sizeof(float) << " bytes" << std::endl;
 
@@ -380,7 +380,7 @@ int test_bin_multi()
 
 	//=============== Read biases =================
 
-	auto tmp_b = gen_matrix(1, weights_width);
+	std::vector<float> tmp_b = gen_matrix(1, weights_width);
 	float *bias_data = tmp_b.data();
 	std::cout << "Size bias: " << tmp_b.size() * sizeof(float) << " bytes" << std::endl;
 
@@ -409,7 +409,7 @@ int test_bin_multi()
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	cudaEventRecord(start);
 	std::cout << "Initializing the input and output of the layer..." << std::endl;
-	bm_l1.load_input_gpu(img_data, input_height); // TODO: qualcosa non va nel calcolo dei byte per l'input binarizzato...verificare.
+	bm_l1.load_input_gpu(img_data, input_height);
 	bm_l1.allocate_output_gpu();
 	cudaEventRecord(end_load);
 
@@ -419,8 +419,9 @@ int test_bin_multi()
 	cudaEventSynchronize(stop);
 
 	// 5 - Retrieve the GPU output.
-	/*float *test_output = new float[bn_l1.input_size()];
-	bn_l1.download_output_gpu(test_output);
+	std::cout << "Size output: " << bm_l1.output_bytes() << " bytes" << std::endl;
+	float *test_output = new float[bm_l1.output_size()];
+	bm_l1.download_output_gpu(test_output);
 
 
 	// 6 - Compute the execution time of the various steps.
@@ -432,7 +433,7 @@ int test_bin_multi()
 
 
 	// Verify GPU output correctness.
-	bool check = true;
+	/* bool check = true;
 	constexpr float epsilon = 1e-5;
 	for(uint32_t n = 0; n < size_batch; n++)
 	{
@@ -453,14 +454,14 @@ int test_bin_multi()
 			}
 		}
 	}
-	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;*/
 
 
 
 	delete[] test_output;
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
-	cudaEventDestroy(stop);*/
+	cudaEventDestroy(stop);
 
 
 	return 0;
