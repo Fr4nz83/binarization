@@ -201,7 +201,7 @@ void BinaryMultiplicationLayer::execute()
 
 	// 5 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
-	Mat_BinMul <<<1000, 32>>> (gpu_copy);
+	Mat_BinMul <<<1000, 64>>> (gpu_copy);
 	cudaDeviceSynchronize();
 }
 
@@ -211,9 +211,9 @@ void BinaryMultiplicationLayer::execute()
 
 /** @brief Binarize and pack weight matrix into 32-bit unsigned matrix.
  *
- *  Binarization function to convert row-major 32-bit floating-point weight matrix into
- *  bit row-major bit-matrix. This is for the preparation of the weight matrices for
- *  FC layers.
+ *  Binarization function to convert a row-major 32-bit floating-point weight matrix into
+ *  into a binarized weight matrix where blocks of 32 32-bit-columns are arranged into a row-major format.
+ *  This is for the preparation of the weight matrices for the binary matrix multiplication.
  *
  *  @return Void.
  *
@@ -230,7 +230,7 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
     #pragma unroll
     for (int i=0; i < 32; i++)
     {
-    	// At each loop the warp is reading a sub-row of 32 values, and every trhead is binarizing a sub-column of 32 values.
+    	// At each loop the warp is reading a sub-row of 32 values, and every thread is binarizing a sub-column of 32 values.
         float f0 = ((by*32 + laneid < A_width) && (bx*32 + i < A_height)) ?
         		   A[((bx*32+i) * A_width) + by * 32 + laneid] :
 				   -1.0f; // NOTE: out-of-bounds values are set to -1 (which corresponds to padding for the upcoming binarization).
@@ -254,8 +254,9 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 
 /** @brief Binarize and pack weight matrix into 32-bit unsigned matrix.
  *
- *  Binarization function to convert row-major 32-bit floating-point weight matrix into
- *  bit column-major bit-matrix. This is for the preparation of the input matrix for binary matrix multiplication.
+ *  Binarization function to convert a row-major 32-bit floating-point input matrix into
+ *  a binarized input matrix where blocks of 32 32-bit-rows are arranged into a column-major format.
+ *  This is for the preparation of the input matrix for binary matrix multiplication.
  *
  *  @return Void.
  */
@@ -309,11 +310,9 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 }
 
 /**
- * @brief This kernel processes batch-normalizes the channels of a set of images.
+ * @brief This kernel performs the binary multiplication between a binarized input matrix and a boinarized weight matrix.
  *
- * @note The kernel assumes that the dataset is stored in NCHW format.
  */
-// TODO: this kernel will have to be a __device__ function at some point.
 __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
@@ -324,7 +323,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 
 
     // Compute the overall number of bit-blocks per input height and weights width.
-    // NOTE: this serves to index and compute the output matrix, as well as the binarized input and weight matrices.
+    // NOTE: this serves to index and compute the FP output matrix, as well as the binarized input and weight matrices.
     const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
     const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
 
@@ -360,12 +359,12 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
             {
             	// Original version: every thread has in charge a bit-row of the input matrix...
             	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
-            	//		 This, of course, may be useful if one wants to transpose the output on the fly.
+            	//		 This, of course, may be useful if one wants to get the output transposed for free.
                 // unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
                 // Cm[j] += __popc(r0 ^ r2);
 
 
-            	// Alternative approach: every thread has in charge a bit-column of the weight matrix)...
+            	// Alternative approach: every thread has in charge a bit-column of the weight matrix...
                 // This allows to write the output matrix in row-major format using coalescing.
             	unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
 				Cm[j] += __popc(r1 ^ r2);
@@ -373,7 +372,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         }
 
 
-        // Compute the final results by applying the binary multiplication formula for -1/1 on the "popc(xor)" results that have been accumulated.
+        // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
 		#pragma unroll
         for(uint8_t i = 0; i < 32; i++)
         	Cm[i] = (int)p->input_width - 2 * Cm[i];
