@@ -505,6 +505,7 @@ int test_bin_multi()
 	delete[] test_output;
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
+	cudaEventDestroy(end_mult);
 	cudaEventDestroy(stop);
 
 
