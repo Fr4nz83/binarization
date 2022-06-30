@@ -1,3 +1,6 @@
+#include "math_constants.h"
+
+
 // *** FORWARD DECLARATIONS OF KERNELS USED BY THIS CLASS *** //
 
 __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
@@ -192,7 +195,7 @@ void BinaryMultiplicationLayer::execute()
 	BinaryMultiplicationLayer* gpu_copy = this->ready();
 
 	// 4 - Input binarization kernel execution.
-	// NOTE: this kernel currently requires each block to have 32 warps.
+	// TODO: this kernel currently requires each block to have 1024 threads (32 warps). Remove this constraint!
 	std::cout << "Binarizing output..." << std::endl;
 	Input_Binarization <<<1000, 1024>>> (gpu_copy);
 
@@ -381,18 +384,37 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         const uint32_t start_row = bx * 32;
         const uint32_t end_row = min(start_row + 32, p->input_height);
         const uint32_t start_column = by * 32;
+        const uint32_t end_column = min(start_column + 32, p->weights_width);
+
+
+        // Read the biases associated to the interval of the columns of the weight matrix involved
+        // by the output block presently considered by this warp.
+        float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
+
+
+        // Write out the output block.
         for(uint32_t row = start_row; row < end_row; row++)
         {
             float* output_sub = &(p->output_gpu[row * p->weights_width + start_column]);
-        	if(start_column + laneid < p->weights_width)
+        	if(start_column + laneid < end_column)
         	{
         		// DEBUG.
         		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
         		//		laneid, (float)Cm[row - start_row],
         		//		row, start_row, end_row, p->weights_width, row - start_row);
 
-        		// TODO: here we can apply the bias and the GELU...
-        		output_sub[laneid] = (float)Cm[row - start_row];
+
+        		// Read the final result of the binary multiplication.
+        		float res = (float)Cm[row - start_row];
+
+        		// Apply the bias.
+        		res += bias;
+
+        		// Apply the GELU.
+        		res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
+
+        		// Write out the final result.
+        		output_sub[laneid] = res;
         	}
         }
     }

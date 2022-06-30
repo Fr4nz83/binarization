@@ -359,9 +359,9 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1024,	// # of input entries.
+	constexpr uint32_t input_height = 100000,	// # of input entries.
 					   weights_height = 4096,	// # of features
-					   weights_width = 256;	// # Activation units
+					   weights_width = 256;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -440,9 +440,10 @@ int test_bin_multi()
 
 
 
+	// *** Verify GPU output correctness *** //
 
 	// Trasformazione in 1/-1 dell'input
-	std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
+	/*std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
 	float *img_data_trans = new float[tmp_img.size()];
 	transform_array_ones(img_data, tmp_img.size(), img_data_trans);
 
@@ -450,7 +451,7 @@ int test_bin_multi()
 	print_array(img_data, input_height, weights_height);
 
 	std::cout << "Stampa matrice input 1/-1..." << std::endl;
-	print_array(img_data_trans, input_height, weights_height);*/
+	print_array(img_data_trans, input_height, weights_height);
 
 
 
@@ -463,7 +464,7 @@ int test_bin_multi()
 	print_array(weights_data, weights_height, weights_width);
 
 	std::cout << "Stampa matrice pesi 1/-1..." << std::endl;
-	print_array(weights_trans, weights_height, weights_width);*/
+	print_array(weights_trans, weights_height, weights_width);
 
 
 	// Calcolo moltiplicazione input x pesi con valori 1/-1.
@@ -482,14 +483,15 @@ int test_bin_multi()
 
 
 
-	// Verify GPU output correctness.
 	bool check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, 1e-5);
 	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
 
-
 	delete[] img_data_trans;
 	delete[] weights_trans;
-	delete[] res_cpu;
+	delete[] res_cpu;*/
+
+
+
 	delete[] test_output;
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
