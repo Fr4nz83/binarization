@@ -197,12 +197,11 @@ void BinaryMultiplicationLayer::execute()
 	// 4 - Input binarization kernel execution.
 	// TODO: this kernel currently requires each block to have 1024 threads (32 warps). Remove this constraint!
 	std::cout << "Binarizing output..." << std::endl;
-	Input_Binarization <<<1000, 1024>>> (gpu_copy);
+	Input_Binarization <<<10000, 32>>> (gpu_copy);
 
 	// 5 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
-	Mat_BinMul <<<1000, 64>>> (gpu_copy);
-	cudaDeviceSynchronize();
+	Mat_BinMul <<<10000, 32>>> (gpu_copy);
 }
 
 
@@ -248,8 +247,8 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
     // 				   blocks of binarized valjes.
     // 				   Each stripe has a size of "32 x ceil(width/32)" 32 bit-columns. Each stripe is made of "ceil(width/32)" blocks, with each block
     //				   containing 32x32 binarized values.
-    if (laneid < A_height * A_width) // TODO: this check should be safely removable.
-        B[bx*(gridDim.y*32) + by*32 + laneid] = Bval;
+    // if (laneid < A_height * A_width) // NOTE: this check should be safely removable.
+    B[bx*(gridDim.y*32) + by*32 + laneid] = Bval;
 }
 
 /** @brief Binarize and pack weight matrix into 32-bit unsigned matrix.
@@ -262,10 +261,11 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
  */
 __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 {
-    GET_LANEID; // Recover warpid and laneid;
-    // constexpr uint32_t WARP_SIZE = 32;
-    // const uint32_t& threads_per_block = blockDim.x;
-    // const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
+    constexpr uint32_t WARP_SIZE = 32;
+	const uint8_t warpid = threadIdx.x / WARP_SIZE;
+	const uint8_t laneid = threadIdx.x % WARP_SIZE;
+    const uint32_t& threads_per_block = blockDim.x;
+    const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
 
 
     const int gdx = (CEIL(p->input_height));
@@ -274,7 +274,7 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
     // NOTA: qui si assume che ogni blocco esegua al suo interno 32 warp (i.e., 1024 thread).
     // Il dataset viene visto come una matrice ove ogni riga e' un'entita' ed una colonna
     // rappresenta una singola feature.
-    for (int bid = blockIdx.x*32 + warpid; bid < gdx*gdy; bid += gridDim.x*32)
+    for (int bid = blockIdx.x * warps_per_block + warpid; bid < gdx*gdy; bid += gridDim.x * warps_per_block)
     {
         unsigned bx = bid / gdy; // "bx" rappresenta un blocco di 32 righe.
         unsigned by = bid % gdy; // "by" rappresenta un blocco di 32 colonne.
@@ -303,9 +303,9 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 
         // Finally every active warp writes out in global memory their block of 32 32-bit-rows.
         // Overall, the blocks are arranged in column-major format.
-        // NOTE: gdx => number of ints required to store a whole bit-column.
-        if (laneid < (p->input_height) * (p->input_width))
-            p->input_bin_gpu[by*gdx*32 + bx*32 + laneid] = val;
+        // NOTE: the if below should be useless and thus have been commented.
+        // if (laneid < (p->input_height) * (p->input_width))
+        p->input_bin_gpu[by*gdx*32 + bx*32 + laneid] = val;
     }
 }
 

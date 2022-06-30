@@ -361,7 +361,7 @@ int test_bin_multi()
 
 	constexpr uint32_t input_height = 10000,	// # of input entries.
 					   weights_height = 400,	// # of features
-					   weights_width = 800;		// # Activation units
+					   weights_width = 400;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
