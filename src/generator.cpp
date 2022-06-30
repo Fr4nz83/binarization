@@ -2,6 +2,7 @@
 #include <random>
 #include <stdio.h>
 #include <iostream>
+#include <math.h>
 
 
 std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
@@ -102,6 +103,12 @@ void apply_bias_matrix(float* mat, const uint32_t& rows, const uint32_t& cols,
 	for(uint32_t row = 0; row < rows; row++)
 		for(uint32_t col = 0; col < cols; col++)
 			mat[row * cols + col] += bias[col];
+}
+
+void apply_gelu_matrix(float* mat, const uint32_t& size)
+{
+	for(uint32_t i = 0; i < size; i++)
+		mat[i] = (0.5 * mat[i]) * (1 + tanhf( sqrtf(2/M_PI) * (mat[i] + 0.044715 * powf(mat[i], 3)) ));
 }
 
 void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)

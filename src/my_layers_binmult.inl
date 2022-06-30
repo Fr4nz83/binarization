@@ -408,7 +408,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         		res += bias;
 
         		// Apply the GELU.
-        		// res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
+        		res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
 
         		// Write out the final result.
         		output_sub[laneid] = res;

@@ -481,7 +481,8 @@ int test_bin_multi()
 		apply_bias_matrix(res_cpu, input_height, weights_width, bias_data);
 
 		// Apply the GELU to the output matrix.
-
+		std::cout << "Applicazione GELU alla output matrix" << std::endl;
+		apply_gelu_matrix(res_cpu, input_height * weights_width);
 
 		// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
 		// print_array(res_cpu, input_height, weights_width);
