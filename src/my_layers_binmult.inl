@@ -329,8 +329,6 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 
 
     // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
-    // NOTE: it seems here that every thread block has 32 warps (1024 threads). This constraint can be removed by computing
-    // the number of warps per block, and then substituting the 32 in this for loop.
     for (int bid = blockIdx.x * warps_per_block + warpid; bid < gdx*gdy; bid += gridDim.x * warps_per_block)
     {
     	unsigned bx = bid / gdy; // Block index on the input height dimension.
@@ -410,7 +408,7 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         		res += bias;
 
         		// Apply the GELU.
-        		res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
+        		// res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
 
         		// Write out the final result.
         		output_sub[laneid] = res;

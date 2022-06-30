@@ -359,9 +359,9 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 100000,	// # of input entries.
-					   weights_height = 4096,	// # of features
-					   weights_width = 256;		// # Activation units
+	constexpr uint32_t input_height = 10000,	// # of input entries.
+					   weights_height = 400,	// # of features
+					   weights_width = 800;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -441,54 +441,63 @@ int test_bin_multi()
 
 
 	// *** Verify GPU output correctness *** //
+	bool check_correctness = true;
+	if(check_correctness)
+	{
+		// Trasformazione in 1/-1 dell'input
+		std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
+		float *img_data_trans = new float[tmp_img.size()];
+		transform_array_ones(img_data, tmp_img.size(), img_data_trans);
 
-	// Trasformazione in 1/-1 dell'input
-	/*std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
-	float *img_data_trans = new float[tmp_img.size()];
-	transform_array_ones(img_data, tmp_img.size(), img_data_trans);
+		// std::cout << "Stampa matrice input originaria..." << std::endl;
+		// print_array(img_data, input_height, weights_height);
 
-	/*std::cout << "Stampa matrice input originaria..." << std::endl;
-	print_array(img_data, input_height, weights_height);
-
-	std::cout << "Stampa matrice input 1/-1..." << std::endl;
-	print_array(img_data_trans, input_height, weights_height);
-
-
-
-	// Trasformazione in 1/-1 della matrice dei pesi.
-	std::cout << "Trasformazione CPU 1/-1 matrice pesi" << std::endl;
-	float *weights_trans = new float[tmp_w.size()];
-	transform_array_ones(weights_data, tmp_w.size(), weights_trans);
-
-	/*std::cout << "Stampa matrice pesi originaria..." << std::endl;
-	print_array(weights_data, weights_height, weights_width);
-
-	std::cout << "Stampa matrice pesi 1/-1..." << std::endl;
-	print_array(weights_trans, weights_height, weights_width);
-
-
-	// Calcolo moltiplicazione input x pesi con valori 1/-1.
-	float *res_cpu = new float[input_height * weights_width];
-	std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
-	matrix_multiplication(img_data_trans, weights_trans,
-						  input_height, weights_width, weights_height,
-						  res_cpu);
-
-
-	// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-	// print_array(res_cpu, input_height, weights_width);
-
-	// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
-	// print_array(test_output, input_height, weights_width);
+		// std::cout << "Stampa matrice input 1/-1..." << std::endl;
+		// print_array(img_data_trans, input_height, weights_height);
 
 
 
-	bool check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, 1e-5);
-	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+		// Trasformazione in 1/-1 della matrice dei pesi.
+		std::cout << "Trasformazione CPU 1/-1 matrice pesi" << std::endl;
+		float *weights_trans = new float[tmp_w.size()];
+		transform_array_ones(weights_data, tmp_w.size(), weights_trans);
 
-	delete[] img_data_trans;
-	delete[] weights_trans;
-	delete[] res_cpu;*/
+		// std::cout << "Stampa matrice pesi originaria..." << std::endl;
+		// print_array(weights_data, weights_height, weights_width);
+
+		// std::cout << "Stampa matrice pesi 1/-1..." << std::endl;
+		// print_array(weights_trans, weights_height, weights_width);
+
+
+		// Calcolo moltiplicazione input x pesi con valori 1/-1.
+		float *res_cpu = new float[input_height * weights_width];
+		std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
+		matrix_multiplication(img_data_trans, weights_trans,
+							  input_height, weights_width, weights_height,
+							  res_cpu);
+
+		// Apply the bias to the output matrix.
+		std::cout << "Applicazione bias alla output matrix" << std::endl;
+		apply_bias_matrix(res_cpu, input_height, weights_width, bias_data);
+
+		// Apply the GELU to the output matrix.
+
+
+		// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		// print_array(res_cpu, input_height, weights_width);
+
+		// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+		// print_array(test_output, input_height, weights_width);
+
+
+		constexpr float eps = 1e-5;
+		bool check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
+		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+		delete[] img_data_trans;
+		delete[] weights_trans;
+		delete[] res_cpu;
+	}
 
 
 

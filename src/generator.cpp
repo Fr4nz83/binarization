@@ -96,6 +96,14 @@ void matrix_multiplication(const float* mat_1, const float* mat_2,
 		}
 }
 
+void apply_bias_matrix(float* mat, const uint32_t& rows, const uint32_t& cols,
+					   const float* bias)
+{
+	for(uint32_t row = 0; row < rows; row++)
+		for(uint32_t col = 0; col < cols; col++)
+			mat[row * cols + col] += bias[col];
+}
+
 void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)
 {
 	for(uint32_t row = 0; row < rows; row++)

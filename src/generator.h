@@ -22,6 +22,8 @@ void transform_array_ones(const float* mat, const uint32_t& size, float* res);
 void matrix_multiplication(const float* mat_1, const float* mat_2,
 						   const uint32_t& r1, const uint32_t& c2, const uint32_t& d,
 						   float* res);
+void apply_bias_matrix(float* mat, const uint32_t& rows, const uint32_t& cols,
+					   const float* bias);
 void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols);
 bool check_eq_matrices(const float* mat1, const float* mat2,
 					   const uint32_t& rows, const uint32_t& cols,
