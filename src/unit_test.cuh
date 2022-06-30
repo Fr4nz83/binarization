@@ -359,9 +359,9 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 3,	// # of input entries.
-					   weights_height = 2,	// # of features
-					   weights_width = 2;	// # Activation units
+	constexpr uint32_t input_height = 1024,	// # of input entries.
+					   weights_height = 4096,	// # of features
+					   weights_width = 256;	// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -402,8 +402,11 @@ int test_bin_multi()
 	//=============== Kernel execution =================
 
 	// CUDA variables needed to measure the time the various operations take.
-	cudaEvent_t start, end_load, stop;
-	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
+	cudaEvent_t start, end_load, end_mult, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&end_load),
+	cudaEventCreate(&end_mult),
+	cudaEventCreate(&stop);
 
 
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
@@ -415,21 +418,24 @@ int test_bin_multi()
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
 	bm_l1.execute();
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
+	cudaEventRecord(end_mult);
 
 	// 5 - Retrieve the GPU output.
 	std::cout << "Size output: " << bm_l1.output_bytes() << " bytes" << std::endl;
 	float *test_output = new float[bm_l1.output_size()];
 	bm_l1.download_output_gpu(test_output);
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
 
 
 	// 6 - Compute the execution time of the various steps.
-	float ms_load, ms_kernel;
+	float ms_load, ms_kernel, ms_out;
 	cudaEventElapsedTime(&ms_load, start, end_load);
-	cudaEventElapsedTime(&ms_kernel, end_load, stop);
+	cudaEventElapsedTime(&ms_kernel, end_load, end_mult);
+	cudaEventElapsedTime(&ms_out, end_mult, stop);
 	std::cout << "Load time: " << ms_load << " ms." << std::endl;
-	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
+	std::cout << "Input binarization + binary multi execution time: " << ms_kernel << " ms." << std::endl;
+	std::cout << "Output to CPU time: " << ms_out << " ms." << std::endl;
 
 
 
@@ -461,18 +467,18 @@ int test_bin_multi()
 
 
 	// Calcolo moltiplicazione input x pesi con valori 1/-1.
-	std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
 	float *res_cpu = new float[input_height * weights_width];
+	std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
 	matrix_multiplication(img_data_trans, weights_trans,
 						  input_height, weights_width, weights_height,
 						  res_cpu);
 
 
-	std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-	print_array(res_cpu, input_height, weights_width);
+	// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+	// print_array(res_cpu, input_height, weights_width);
 
-	std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
-	print_array(test_output, input_height, weights_width);
+	// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+	// print_array(test_output, input_height, weights_width);
 
 
 

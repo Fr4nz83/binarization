@@ -194,11 +194,11 @@ void BinaryMultiplicationLayer::execute()
 	// 4 - Input binarization kernel execution.
 	// NOTE: this kernel currently requires each block to have 32 warps.
 	std::cout << "Binarizing output..." << std::endl;
-	Input_Binarization <<<100, 1024>>> (gpu_copy);
+	Input_Binarization <<<1000, 1024>>> (gpu_copy);
 
 	// 5 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
-	Mat_BinMul <<<1, 32>>> (gpu_copy);
+	Mat_BinMul <<<1000, 32>>> (gpu_copy);
 	cudaDeviceSynchronize();
 }
 
@@ -383,11 +383,13 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         const uint32_t start_column = by * 32;
         for(uint32_t row = start_row; row < end_row; row++)
         {
-            float* output_sub = &(p->output_gpu[row * p->input_height + start_column]);
+            float* output_sub = &(p->output_gpu[row * p->weights_width + start_column]);
         	if(start_column + laneid < p->weights_width)
         	{
         		// DEBUG.
-        		// printf("thread %d is writing! R:%d SR:%d ER:%d WW:%d DIFF:%d\n", laneid, row, start_row, end_row, p->weights_width, row - start_row);
+        		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
+        		//		laneid, (float)Cm[row - start_row],
+        		//		row, start_row, end_row, p->weights_width, row - start_row);
 
         		// TODO: here we can apply the bias and the GELU...
         		output_sub[laneid] = (float)Cm[row - start_row];
