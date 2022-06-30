@@ -87,8 +87,42 @@ void matrix_multiplication(const float* mat_1, const float* mat_2,
 						   const uint32_t& r1, const uint32_t& c2, const uint32_t& d,
 						   float* res)
 {
-	for (uint32_t i = 0; i < r1; ++i)
-		for (uint32_t j = 0; j < c2; ++j)
-			for (uint32_t k = 0; k < d; ++k)
+	for (uint32_t i = 0; i < r1; i++)
+		for (uint32_t j = 0; j < c2; j++)
+		{
+			res[i * c2 + j] = 0;
+			for (uint32_t k = 0; k < d; k++)
 				res[i * c2 + j] += mat_1[i * d + k] * mat_2[k * c2 + j];
+		}
+}
+
+void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)
+{
+	for(uint32_t row = 0; row < rows; row++)
+	{
+		std::cout << "Line " << row << ": ";
+		for(uint32_t col = 0; col < cols; col++)
+		{
+			std::cout << arr[row * cols + col] << " ";
+		}
+		std::cout << std::endl;
+	}
+}
+
+bool check_eq_matrices(const float* mat1, const float* mat2,
+					   const uint32_t& rows, const uint32_t& cols,
+					   const float eps)
+{
+	bool check = true;
+	for(uint32_t row = 0; row < rows; row++)
+	{
+		for(uint32_t col = 0; col < cols; col++)
+			if(std::abs(mat1[row * cols + col] - mat2[row * cols + col] > eps))
+			{
+				check = false;
+				break;
+			}
+	}
+
+	return check;
 }

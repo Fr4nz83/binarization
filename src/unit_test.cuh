@@ -359,9 +359,9 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1,	// # of input entries.
-					   weights_height = 3,	// # of features
-					   weights_width = 4;	// # Activation units
+	constexpr uint32_t input_height = 3,	// # of input entries.
+					   weights_height = 2,	// # of features
+					   weights_width = 2;	// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -435,72 +435,55 @@ int test_bin_multi()
 
 
 
-
+	// Trasformazione in 1/-1 dell'input
+	std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
 	float *img_data_trans = new float[tmp_img.size()];
 	transform_array_ones(img_data, tmp_img.size(), img_data_trans);
 
-	for(uint32_t i = 0; i < tmp_img.size(); i++)
-		std::cout << img_data[i] << " ";
-	std::cout << std::endl;
+	/*std::cout << "Stampa matrice input originaria..." << std::endl;
+	print_array(img_data, input_height, weights_height);
 
-	for(uint32_t i = 0; i < tmp_img.size(); i++)
-		std::cout << img_data_trans[i] << " ";
-	std::cout << std::endl;
+	std::cout << "Stampa matrice input 1/-1..." << std::endl;
+	print_array(img_data_trans, input_height, weights_height);*/
 
 
 
+	// Trasformazione in 1/-1 della matrice dei pesi.
+	std::cout << "Trasformazione CPU 1/-1 matrice pesi" << std::endl;
 	float *weights_trans = new float[tmp_w.size()];
 	transform_array_ones(weights_data, tmp_w.size(), weights_trans);
 
-	for(uint32_t i = 0; i < tmp_w.size(); i++)
-		std::cout << weights_data[i] << " ";
-	std::cout << std::endl;
+	/*std::cout << "Stampa matrice pesi originaria..." << std::endl;
+	print_array(weights_data, weights_height, weights_width);
 
-	for(uint32_t i = 0; i < tmp_w.size(); i++)
-		std::cout << weights_trans[i] << " ";
-	std::cout << std::endl;
+	std::cout << "Stampa matrice pesi 1/-1..." << std::endl;
+	print_array(weights_trans, weights_height, weights_width);*/
 
 
+	// Calcolo moltiplicazione input x pesi con valori 1/-1.
+	std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
 	float *res_cpu = new float[input_height * weights_width];
 	matrix_multiplication(img_data_trans, weights_trans,
 						  input_height, weights_width, weights_height,
 						  res_cpu);
 
-	for(uint32_t i = 0; i < input_height * weights_width; i++)
-		std::cout << res_cpu[i] << " ";
-	std::cout << std::endl;
 
-	for(uint32_t i = 0; i < input_height * weights_width; i++)
-		std::cout << test_output[i] << " ";
-	std::cout << std::endl;
+	std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+	print_array(res_cpu, input_height, weights_width);
+
+	std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+	print_array(test_output, input_height, weights_width);
+
 
 
 	// Verify GPU output correctness.
-	/* bool check = true;
-	constexpr float epsilon = 1e-5;
-	for(uint32_t n = 0; n < size_batch; n++)
-	{
-		const uint32_t offset_img = n * image_channels * image_height * image_width;
-		for(uint32_t c = 0; c < image_channels; c++)
-		{
-			const uint32_t offset_color = (image_height * image_width) * c;
-
-			for(uint32_t i = 0; i < image_height * image_width; i++)
-			{
-				float cpu_o = scale_test[c] * img_data[offset_img + offset_color + i] + shift_test[c];
-
-				// We have an error if the absolute difference between what's computed on CPU and that computed on GPU
-				// is above a given epsilon.
-				float gpu_o = test_output[offset_img + offset_color + i];
-				if(std::abs(cpu_o - gpu_o) > epsilon) check = false;
-					// std::cout << "ERRORE! " << cpu_o << " vs " << gpu_o << " (" << std::abs(cpu_o - gpu_o) << ") " << std::endl;
-			}
-		}
-	}
-	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;*/
+	bool check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, 1e-5);
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
 
 
-
+	delete[] img_data_trans;
+	delete[] weights_trans;
+	delete[] res_cpu;
 	delete[] test_output;
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
