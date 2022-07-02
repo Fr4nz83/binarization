@@ -20,8 +20,6 @@
 #include <thrust/device_vector.h>
 
 #include "utility.h"
-#include "sbnn32_param.h"
-#include "sbnn32.cuh"
 #include "data.h"
 #include "dataset_reader.h"
 
@@ -348,6 +346,7 @@ int test_transpose_layer()
 int test_bin_multi()
 {
 	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
+	const bool check_correctness = true;
 
 
 
@@ -441,7 +440,6 @@ int test_bin_multi()
 
 
 	// *** Verify GPU output correctness *** //
-	bool check_correctness = true;
 	if(check_correctness)
 	{
 		// Trasformazione in 1/-1 dell'input

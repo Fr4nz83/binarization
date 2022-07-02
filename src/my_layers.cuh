@@ -10,7 +10,6 @@
 
 // *** INCLUDES *** //
 #include <cudnn.h>
-#include "sbnn32_param.h"
 
 
 
@@ -300,7 +299,10 @@ public:
 	// GPU shadow.
 	BinaryMultiplicationLayer* gpu;
 
+	// Layer general properties.
 	char name[8];
+	bool transpose_output;
+	bool apply_gelu;
 
 
 
@@ -310,7 +312,9 @@ public:
 						   	  const unsigned& weigths_height,
 							  const unsigned& weigths_width,
 							  const float* weights,
-							  const float* bias);
+							  const float* bias,
+							  const bool& transpose_output = false,
+							  const bool& apply_gelu = true);
 	~BinaryMultiplicationLayer(){this->release();};
 
 
@@ -331,8 +335,8 @@ public:
 
 	inline int output_size() {return this->input_height * this->weights_width;}
 	inline int output_bytes() {return this->output_size() * sizeof(float);}
-	inline int get_output_width() {return this->weights_width;}
-	inline int get_output_height() {return this->input_height;}
+	inline int get_output_width() {return !this->transpose_output ? this->weights_width : this->input_height;}
+	inline int get_output_height() {return !this->transpose_output ? this->input_height : this->weights_width;}
 
 	inline int weights_size() {return this->weights_width * this->weights_height;}
 	inline int weight_bytes() {return this->weights_size() * sizeof(float);}

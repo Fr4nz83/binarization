@@ -7,6 +7,7 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 							 const int A_height, const int A_width);
 __global__ void Input_Binarization(BinaryMultiplicationLayer *p);
 __global__ void Mat_BinMul(BinaryMultiplicationLayer* p);
+__global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p);
 
 
 
@@ -16,7 +17,9 @@ BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
 													 const unsigned& weigths_height, // This corresponds to number of features.
 													 const unsigned& weigths_width,  // This corresponds to the number of hidden units.
 													 const float* weights,
-													 const float* bias) :
+													 const float* bias,
+													 const bool& transpose_output,
+													 const bool& apply_gelu) :
 input_gpu(NULL),
 input_bin_gpu(NULL),
 input_height(0),
@@ -26,7 +29,9 @@ weights_height(weigths_height),
 weights_width(weigths_width),
 bias_gpu(NULL),
 output_gpu(NULL),
-gpu(NULL)
+gpu(NULL),
+transpose_output(transpose_output),
+apply_gelu(apply_gelu)
 {
 	strncpy(this->name, name, 8);
 	std::cout << "Invoking constructor for " << this->name << std::endl;
@@ -201,7 +206,11 @@ void BinaryMultiplicationLayer::execute()
 
 	// 5 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
-	Mat_BinMul <<<10000, 32>>> (gpu_copy);
+	if(!this->transpose_output)
+		Mat_BinMul <<<10000, 32>>> (gpu_copy);
+	// TODO: the transposed output must be checked for correctness.
+	else
+		Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
 }
 
 
@@ -310,7 +319,8 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 }
 
 /**
- * @brief This kernel performs the binary multiplication between a binarized input matrix and a boinarized weight matrix.
+ * @brief This kernel performs the binary multiplication between a binarized input matrix and a binarized weight matrix,
+ * 		  and produces the output matrix in row-major format.
  *
  */
 __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
@@ -408,7 +418,111 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
         		res += bias;
 
         		// Apply the GELU.
-        		res = (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) ));
+        		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
+
+        		// Write out the final result.
+        		output_sub[laneid] = res;
+        	}
+        }
+    }
+}
+
+/**
+ * @brief This kernel performs the binary multiplication between a binarized input matrix and a boinarized weight matrix,
+ * 		  and produces the output matrix in column-major (i.e., transposed) format.
+ *
+ */
+// TODO: to be tested!
+__global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
+{
+    constexpr uint32_t WARP_SIZE = 32;
+	const uint8_t warpid = threadIdx.x / WARP_SIZE;
+	const uint8_t laneid = threadIdx.x % WARP_SIZE;
+    const uint32_t& threads_per_block = blockDim.x;
+    const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
+
+
+    // Compute the overall number of bit-blocks per input height and weights width.
+    // NOTE: this serves to index and compute the FP output matrix, as well as the binarized input and weight matrices.
+    const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
+    const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
+
+
+    // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
+    for (int bid = blockIdx.x * warps_per_block + warpid; bid < gdx*gdy; bid += gridDim.x * warps_per_block)
+    {
+    	unsigned bx = bid / gdy; // Block index on the input height dimension.
+        unsigned by = bid % gdy; // Block index on the weights width dimension.
+
+        // DEBUG.
+        // if(laneid == 0) printf("Processing block (%d,%d)\n", by,bx);
+
+
+        const unsigned* input_sub = &(p->input_bin_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
+        												    	// containing 32 32-bit-rows.
+        const unsigned* weight_sub = &(p->weights_gpu[by*32]);  // RECALL: Weight matrix is made of row-major arranged blocks (hence the by),
+        													    // each containing 32 32-bit-columns.
+
+
+        // Here we perform a warp-level vector-vector binary multiplication using the
+        // common dimension between the input and weight matrices.
+        register int Cm[32] = {0};
+        for (int i=0; (i*32) < (p->input_width); i++)
+        {
+            unsigned r0 = input_sub[i*32*gdx + laneid]; // Ogni thread del warp legge una 32-bit sub-row della input matrix
+            unsigned r1 = weight_sub[i*32*gdy + laneid]; // Ogni thread del warp legge una 32-bit sub-column della weight matrix
+
+            #pragma unroll
+            for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
+            {
+            	// Original version: every thread has in charge a bit-row of the input matrix...
+            	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
+            	//		 This, of course, may be useful if one wants to get the output transposed for free.
+                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                Cm[j] += __popc(r0 ^ r2);
+            }
+        }
+
+
+        // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
+		#pragma unroll
+        for(uint8_t i = 0; i < 32; i++)
+        	Cm[i] = (int)p->input_width - 2 * Cm[i];
+
+
+        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built in:
+        // full precision and column-major format.
+        const uint32_t start_row = bx * 32;
+        const uint32_t end_row = min(start_row + 32, p->input_height);
+        const uint32_t start_column = by * 32;
+        const uint32_t end_column = min(start_column + 32, p->weights_width);
+
+
+        // Read the biases associated to the interval of the columns of the weight matrix involved
+        // by the output block presently considered by this warp.
+        float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
+
+
+        // Write out the output block in column-major format -- this has the effect of transposing the output matrix!
+        for(uint32_t column = start_column; column < end_column; column++)
+        {
+            float* output_sub = &(p->output_gpu[column * p->weights_height + start_row]);
+        	if(start_row + laneid < end_row)
+        	{
+        		// DEBUG.
+        		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
+        		//		laneid, (float)Cm[row - start_row],
+        		//		row, start_row, end_row, p->weights_width, row - start_row);
+
+
+        		// Read the final result of the binary multiplication.
+        		float res = (float)Cm[column - start_column];
+
+        		// Apply the bias associated with the currently considered column.
+        		res += __shfl_sync(0xFFFFFFFF, bias, column - start_column);
+
+        		// Apply the GELU.
+        		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
 
         		// Write out the final result.
         		output_sub[laneid] = res;
