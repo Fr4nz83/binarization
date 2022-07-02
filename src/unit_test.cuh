@@ -15,15 +15,7 @@
 #include <vector>
 #include <chrono>
 
-#include <cooperative_groups.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-
-#include "utility.h"
-#include "data.h"
 #include "dataset_reader.h"
-
-#include "binarization.cuh"
 #include "my_layers.cuh"
 
 #include "generator.h"

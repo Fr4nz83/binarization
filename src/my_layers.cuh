@@ -10,6 +10,7 @@
 
 // *** INCLUDES *** //
 #include <cudnn.h>
+#include "cuda_utilities.cuh"
 
 
 

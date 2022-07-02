@@ -6,20 +6,12 @@
 #include <vector>
 #include <chrono>
 
-#include <cooperative_groups.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-
-#include "utility.h"
 #include "data.h"
 #include "dataset_reader.h"
-
-#include "binarization.cuh"
-#include "my_layers.cuh"
-
 #include "generator.h"
 #include "cnpy.h"
 
+#include "my_layers.cuh"
 #include "unit_test.cuh"
 
 
@@ -52,7 +44,7 @@ int main()
 
 int main_new()
 {
-    using namespace cooperative_groups;
+    // using namespace cooperative_groups;
     
 
     //=============== Device Configuration =================
@@ -99,12 +91,12 @@ int main_new()
     
 
     //================ Setup parameters Kernels =================
-    constexpr int numThreads = 1024;
+    /*constexpr int numThreads = 1024;
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
     int numBlocksPerSm;
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, calc_stats, numThreads, 0);
-    cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;
+    cout << "Number blocks per SM with calc_stats kernel: " << numBlocksPerSm << std::endl;*/
     
     
     
