@@ -338,7 +338,9 @@ int test_transpose_layer()
 int test_bin_multi()
 {
 	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
-	const bool check_correctness = true;
+	constexpr bool check_correctness = true;
+	constexpr bool apply_gelu = true;
+	constexpr bool transposed_output_gpu = false;
 
 
 
@@ -350,21 +352,22 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 10000,	// # of input entries.
-					   weights_height = 400,	// # of features
-					   weights_width = 400;		// # Activation units
+	constexpr uint32_t input_height = 1024 * 10,	// # of input entries.
+					   weights_height = 1024 * 4,	// # of features
+					   weights_width = 128 * 2;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
 	float *img_data = tmp_img.data();
+	std::cout << "Input matrix properties => ROWS:" << input_height << " COLS:" << weights_height << std::endl;
 	std::cout << "Size input: " << tmp_img.size() * sizeof(float) << " bytes" << std::endl;
-
 
 
 	//=============== Read weigths =================
 
 	std::vector<float> tmp_w = gen_matrix(weights_height, weights_width);
 	float *weights_data = tmp_w.data();
+	std::cout << "Weight matrix properties => ROWS:" << weights_height << " COLS:" << weights_width << std::endl;
 	std::cout << "Size weights: " << tmp_w.size() * sizeof(float) << " bytes" << std::endl;
 
 
@@ -373,7 +376,13 @@ int test_bin_multi()
 
 	std::vector<float> tmp_b = gen_matrix(1, weights_width);
 	float *bias_data = tmp_b.data();
+	std::cout << "Bias vector properties => COLS:" << weights_width << std::endl;
 	std::cout << "Size bias: " << tmp_b.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	std::cout << "Output matrix (non-transposed) properties => ROWS:" << input_height << " COLS:" << weights_width << std::endl;
+	std::cout << "Size output: " << input_height * weights_width * sizeof(float) << " bytes" << std::endl;
 
 
 
@@ -386,9 +395,9 @@ int test_bin_multi()
 									weights_height, // Input features
 									weights_width,  // Activation units
 									weights_data,   // Pointer to the weights array
-									bias_data); 	// Pointer to the bias vector
-
-
+									bias_data,	 	// Pointer to the bias vector
+									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
+									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
 	//=============== Kernel execution =================
 
@@ -471,27 +480,51 @@ int test_bin_multi()
 		apply_bias_matrix(res_cpu, input_height, weights_width, bias_data);
 
 		// Apply the GELU to the output matrix.
-		std::cout << "Applicazione GELU alla output matrix" << std::endl;
-		apply_gelu_matrix(res_cpu, input_height * weights_width);
+		if(apply_gelu)
+		{
+			std::cout << "Applicazione GELU alla output matrix" << std::endl;
+			apply_gelu_matrix(res_cpu, input_height * weights_width);
+		}
 
-		// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-		// print_array(res_cpu, input_height, weights_width);
+		/*std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		print_array(res_cpu, input_height, weights_width);*/
 
-		// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
-		// print_array(test_output, input_height, weights_width);
+		/*std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+		if(!transposed_output_gpu)
+			print_array(test_output, input_height, weights_width);
+		else
+		{
+			std::cout << "NOTE: the output matrix has been transposed by the GPU!" << std::endl;
+			print_array(test_output, weights_width, input_height);
+		}*/
 
 
 		constexpr float eps = 1e-5;
-		bool check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
+		bool check = true;
+		if(!transposed_output_gpu)
+		{
+			std::cout << "Check output GPU correctness with normal matrices..." << std::endl;
+			check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
+		}
+		else
+		{
+			std::cout << "Check transposed output GPU correctness..." << std::endl;
+			float* transposed_mat = new float[input_height * weights_width];
+			transpose_matrix(res_cpu, transposed_mat, input_height, weights_width);
+			check = check_eq_matrices(transposed_mat, test_output, weights_width, input_height, eps);
+			delete[] transposed_mat;
+		}
 		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
 
+
+		// Dealloc the resources in the heap that have been used to check the GPU output correctness.
 		delete[] img_data_trans;
 		delete[] weights_trans;
 		delete[] res_cpu;
 	}
 
 
-
+	// Dealloc the various resources used within this function.
 	delete[] test_output;
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);

@@ -200,17 +200,15 @@ void BinaryMultiplicationLayer::execute()
 	BinaryMultiplicationLayer* gpu_copy = this->ready();
 
 	// 4 - Input binarization kernel execution.
-	// TODO: this kernel currently requires each block to have 1024 threads (32 warps). Remove this constraint!
 	std::cout << "Binarizing output..." << std::endl;
-	Input_Binarization <<<10000, 32>>> (gpu_copy);
+	Input_Binarization <<<1000, 128>>> (gpu_copy);
 
 	// 5 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
 	if(!this->transpose_output)
-		Mat_BinMul <<<10000, 32>>> (gpu_copy);
-	// TODO: the transposed output must be checked for correctness.
+		Mat_BinMul <<<1000, 128>>> (gpu_copy);
 	else
-		Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
+		Mat_BinMul_T <<<1000, 128>>> (gpu_copy);
 }
 
 
@@ -429,10 +427,9 @@ __global__ void Mat_BinMul(BinaryMultiplicationLayer* p)
 
 /**
  * @brief This kernel performs the binary multiplication between a binarized input matrix and a boinarized weight matrix,
- * 		  and produces the output matrix in column-major (i.e., transposed) format.
+ * 		  and produces the ***transposed*** output matrix in row-major format.
  *
  */
-// TODO: to be tested!
 __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
@@ -483,11 +480,11 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
             }
         }
 
-
         // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
 		#pragma unroll
         for(uint8_t i = 0; i < 32; i++)
         	Cm[i] = (int)p->input_width - 2 * Cm[i];
+
 
 
         // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built in:
@@ -497,29 +494,35 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
         const uint32_t start_column = by * 32;
         const uint32_t end_column = min(start_column + 32, p->weights_width);
 
-
         // Read the biases associated to the interval of the columns of the weight matrix involved
-        // by the output block presently considered by this warp.
+        // by the output block presently considered by this warp. Uses coalescing.
         float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
 
-
-        // Write out the output block in column-major format -- this has the effect of transposing the output matrix!
+        // Write out the output block in column-major format -- this has the effect of writing the transposed output matrix
+        // in row-major format.
         for(uint32_t column = start_column; column < end_column; column++)
         {
-            float* output_sub = &(p->output_gpu[column * p->weights_height + start_row]);
-        	if(start_row + laneid < end_row)
+            float* output_sub = &(p->output_gpu[column * p->input_height + start_row]); // Compute the output address for the sub-column to write.
+            float bias_col = __shfl_sync(0xFFFFFFFF, bias, column - start_column); // Here each thread retrieves the bias to apply to this column
+            																	   // from the thread in the warp that has read it before.
+
+            if(start_row + laneid < end_row)
         	{
         		// DEBUG.
-        		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
-        		//		laneid, (float)Cm[row - start_row],
-        		//		row, start_row, end_row, p->weights_width, row - start_row);
+        		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
+        				laneid, (float)Cm[column - start_column],
+						start_row + laneid, start_row, end_row,
+						column, start_column, end_column,
+						p->weights_width,
+						laneid,
+						column - start_column);*/
 
 
         		// Read the final result of the binary multiplication.
         		float res = (float)Cm[column - start_column];
 
         		// Apply the bias associated with the currently considered column.
-        		res += __shfl_sync(0xFFFFFFFF, bias, column - start_column);
+        		res += bias_col;
 
         		// Apply the GELU.
         		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;

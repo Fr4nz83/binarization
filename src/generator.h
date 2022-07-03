@@ -27,6 +27,7 @@ void apply_bias_matrix(float* mat, const uint32_t& rows, const uint32_t& cols,
 					   const float* bias);
 void apply_gelu_matrix(float* mat, const uint32_t& size);
 void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols);
+void transpose_matrix(const float* src, float* dest, const uint32_t& rows, const uint32_t& cols);
 bool check_eq_matrices(const float* mat1, const float* mat2,
 					   const uint32_t& rows, const uint32_t& cols,
 					   const float eps);

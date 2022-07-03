@@ -124,6 +124,13 @@ void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)
 	}
 }
 
+void transpose_matrix(const float* src, float* dest, const uint32_t& rows, const uint32_t& cols)
+{
+	for(uint32_t r = 0; r < rows; r++)
+		for(uint32_t c = 0; c < cols; c++)
+			dest[c * rows + r] = src[r * cols + c];
+}
+
 bool check_eq_matrices(const float* mat1, const float* mat2,
 					   const uint32_t& rows, const uint32_t& cols,
 					   const float eps)
