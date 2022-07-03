@@ -352,7 +352,7 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1024 * 10,	// # of input entries.
+	constexpr uint32_t input_height = 1024 * 100,	// # of input entries.
 					   weights_height = 1024 * 4,	// # of features
 					   weights_width = 128 * 2;		// # Activation units
 
@@ -404,8 +404,8 @@ int test_bin_multi()
 	// CUDA variables needed to measure the time the various operations take.
 	cudaEvent_t start, end_load, end_mult, stop;
 	cudaEventCreate(&start);
-	cudaEventCreate(&end_load),
-	cudaEventCreate(&end_mult),
+	cudaEventCreate(&end_load);
+	cudaEventCreate(&end_mult);
 	cudaEventCreate(&stop);
 
 

@@ -196,19 +196,41 @@ void BinaryMultiplicationLayer::download_output_gpu(float* output)
 
 void BinaryMultiplicationLayer::execute()
 {
-	// 3 - Prepare the layer for execution.
+	cudaEvent_t start_bin, end_bin, end_mult;
+	cudaEventCreate(&start_bin);
+	cudaEventCreate(&end_bin);
+	cudaEventCreate(&end_mult);
+
+
+	// 1 - Prepare the layer for execution.
 	BinaryMultiplicationLayer* gpu_copy = this->ready();
 
-	// 4 - Input binarization kernel execution.
+	// 2 - Input binarization kernel execution.
 	std::cout << "Binarizing output..." << std::endl;
+	cudaEventRecord(start_bin);
 	Input_Binarization <<<1000, 128>>> (gpu_copy);
+	cudaEventRecord(end_bin);
 
-	// 5 - Input binarization kernel execution.
+	// 3 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
 	if(!this->transpose_output)
-		Mat_BinMul <<<1000, 128>>> (gpu_copy);
+		Mat_BinMul <<<10000, 32>>> (gpu_copy);
 	else
-		Mat_BinMul_T <<<1000, 128>>> (gpu_copy);
+		Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
+	cudaEventRecord(end_mult);
+	cudaEventSynchronize(end_mult);
+
+
+	float ms_bin, ms_mult;
+	cudaEventElapsedTime(&ms_bin, start_bin, end_bin);
+	cudaEventElapsedTime(&ms_mult, end_bin, end_mult);
+	std::cout << "Input binarization time: " << ms_bin << " ms." << std::endl;
+	std::cout << "Bin mult time: " << ms_mult << " ms." << std::endl;
+
+
+	cudaEventDestroy(start_bin);
+	cudaEventDestroy(end_bin);
+	cudaEventDestroy(end_mult);
 }
 
 
@@ -277,6 +299,9 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
 
     const int gdx = (CEIL(p->input_height));
     const int gdy = (CEIL(p->input_width));
+    const uint32_t input_width = p->input_width;
+    const uint32_t input_height = p->input_height;
+
 
     // NOTA: qui si assume che ogni blocco esegua al suo interno 32 warp (i.e., 1024 thread).
     // Il dataset viene visto come una matrice ove ogni riga e' un'entita' ed una colonna
@@ -287,7 +312,7 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
         unsigned by = bid % gdy; // "by" rappresenta un blocco di 32 colonne.
         // NOTA: Una singola coppia di valori (bx,by) rappresenta una sottomatrice di 32x32 valori.
 
-        unsigned val;
+        register unsigned val;
         #pragma unroll
         for (int i=0; i<32; i++)
         {
@@ -295,8 +320,10 @@ __global__ void Input_Binarization(BinaryMultiplicationLayer *p)
         	// dalla matrice il valore viene impostato a -1).
         	// - bx*32+i => rappresenta l'indice della riga considerata.
         	// - by*32+laneid => rappresenta l'indice della colonna considerata.
-            float f0 = ((by*32 + laneid < (p->input_width)) && (bx*32+i < (p->input_height))) ?
-            		   p->input_gpu[(bx*32+i)*(p->input_width) + by*32 + laneid] :
+        	const uint32_t col = by*32 + laneid;
+        	const uint32_t row = bx*32 + i;
+            float f0 = ((col < (input_width)) && (row < (input_height))) ?
+            		   p->input_gpu[row * (input_width) + col] :
 					   -1.0f;
 
             // I warp si passano le binarizzazioni dei valori fra di loro tramite "ballot". "brev" viene usato
