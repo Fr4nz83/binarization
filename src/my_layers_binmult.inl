@@ -8,6 +8,8 @@ __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 __global__ void Input_Binarization(BinaryMultiplicationLayer *p);
 __global__ void Mat_BinMul(BinaryMultiplicationLayer* p);
 __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p);
+__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p);
+__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p);
 
 
 
@@ -558,5 +560,238 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
         		output_sub[laneid] = res;
         	}
         }
+    }
+}
+
+/**
+ * @brief This kernel performs the binary multiplication between a binarized input matrix and a binarized weight matrix,
+ * 		  and produces the output matrix in binarized format, where the blocks are arranged in column-major format and each
+ * 		  block contains 32 32-bit-rows.
+ */
+// TODO: the kernel should be ready, it has to be tested for correctness.
+// TODO: also, the pointer to binarized output must be appropriately handled by the class.
+__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
+{
+    constexpr uint32_t WARP_SIZE = 32;
+	const uint8_t warpid = threadIdx.x / WARP_SIZE;
+	const uint8_t laneid = threadIdx.x % WARP_SIZE;
+    const uint32_t& threads_per_block = blockDim.x;
+    const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
+
+
+    // Compute the overall number of bit-blocks per input height and weights width.
+    // NOTE: this serves to index and compute the FP output matrix, as well as the binarized input and weight matrices.
+    const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
+    const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
+
+
+    // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
+    for (int bid = blockIdx.x * warps_per_block + warpid; bid < gdx*gdy; bid += gridDim.x * warps_per_block)
+    {
+    	unsigned bx = bid / gdy; // Block index on the input height dimension.
+        unsigned by = bid % gdy; // Block index on the weights width dimension.
+
+        // DEBUG.
+        // if(laneid == 0) printf("Processing block (%d,%d)\n", by,bx);
+
+
+        const unsigned* input_sub = &(p->input_bin_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
+        												    	// containing 32 32-bit-rows.
+        const unsigned* weight_sub = &(p->weights_gpu[by*32]);  // RECALL: Weight matrix is made of row-major arranged blocks (hence the by),
+        													    // each containing 32 32-bit-columns.
+
+
+        // Here we perform a warp-level vector-vector binary multiplication using the
+        // common dimension between the input and weight matrices.
+        register int Cm[32] = {0};
+        for (int i=0; (i*32) < (p->input_width); i++)
+        {
+            unsigned r0 = input_sub[i*32*gdx + laneid]; // Ogni thread legge una 32-bit sub-row
+            unsigned r1 = weight_sub[i*32*gdy + laneid];
+
+            #pragma unroll
+            for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
+            {
+            	// Original version: every thread has in charge a bit-row of the input matrix...
+            	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
+            	//		 This, of course, may be useful if one wants to get the output transposed for free.
+                // unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                // Cm[j] += __popc(r0 ^ r2);
+
+
+            	// Alternative approach: every thread has in charge a bit-column of the weight matrix...
+                // This allows to write the output matrix in row-major format using coalescing.
+            	unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
+				Cm[j] += __popc(r1 ^ r2);
+            }
+        }
+
+
+        // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
+		#pragma unroll
+        for(uint8_t i = 0; i < 32; i++)
+        	Cm[i] = (int)p->input_width - 2 * Cm[i];
+
+
+        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built in:
+        // full precision and row-major format.
+        const uint32_t start_row = bx * 32;
+        const uint32_t end_row = min(start_row + 32, p->input_height);
+        const uint32_t start_column = by * 32;
+        const uint32_t end_column = min(start_column + 32, p->weights_width);
+
+
+        // Read the biases associated to the interval of the columns of the weight matrix involved
+        // by the output block presently considered by this warp.
+        float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
+
+
+        // Write out the binarized output block that has been assigned to this warp.
+        unsigned* output_sub = &(p->output_gpu[by*(gdx*32) + bx*32]);
+        unsigned val = 0;
+        for(uint32_t row = start_row; row < end_row; row++)
+        {
+            float res = -1.;
+        	if(start_column + laneid < end_column)
+        	{
+        		// DEBUG.
+        		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
+        		//		laneid, (float)Cm[row - start_row],
+        		//		row, start_row, end_row, p->weights_width, row - start_row);
+
+
+        		// Read the final result of the binary multiplication.
+        		res = (float)Cm[row - start_row];
+
+        		// Apply the bias.
+        		res += bias;
+
+        		// Apply the GELU.
+        		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
+        	}
+
+        	// Collectively binarize the row
+        	unsigned res_row_bin = __brev(__ballot_sync(0xFFFFFFFF, res >= 0));
+        	if(laneid == (row - start_row)) val = res_row_bin;
+        }
+
+    	// Write out the block of 32 32-bit-rows binarized by this warp (we use coalescing!).
+		output_sub[laneid] = val;
+    }
+}
+
+/**
+ * @brief This kernel performs the binary multiplication between a binarized input matrix and a binarized weight matrix,
+ * 		  and produces the binarized ***transposed*** output matrix.
+ * 		  The binarized output matrix has its blocks arranged in column-major format, and each block contains 32 32-bit-rows.
+ */
+// TODO: the kernel should be ready, it has to be tested for correctness.
+// TODO: also, the pointer to binarized output must be appropriately handled by the class.
+__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
+{
+    constexpr uint32_t WARP_SIZE = 32;
+	const uint8_t warpid = threadIdx.x / WARP_SIZE;
+	const uint8_t laneid = threadIdx.x % WARP_SIZE;
+    const uint32_t& threads_per_block = blockDim.x;
+    const uint32_t warps_per_block = threads_per_block / WARP_SIZE;
+
+
+    // Compute the overall number of bit-blocks per input height and weights width.
+    // NOTE: this serves to index and compute the FP output matrix, as well as the binarized input and weight matrices.
+    const int gdx = CEIL(p->input_height); // Height of the binarized output matrix.
+    const int gdy = CEIL(p->weights_width); // Width of the binarized output matrix.
+
+
+    // Here every "bid" represents a warp that computes a sub-matrix of 32x32 values in the output matrix.
+    for (int bid = blockIdx.x * warps_per_block + warpid; bid < gdx*gdy; bid += gridDim.x * warps_per_block)
+    {
+    	unsigned bx = bid / gdy; // Block index on the input height dimension.
+        unsigned by = bid % gdy; // Block index on the weights width dimension.
+
+        // DEBUG.
+        // if(laneid == 0) printf("Processing block (%d,%d)\n", by,bx);
+
+
+        const unsigned* input_sub = &(p->input_bin_gpu[bx*32]); // RECALL: Input matrix is made of column-major arranged blocks (hence the bx), each
+        												    	// containing 32 32-bit-rows.
+        const unsigned* weight_sub = &(p->weights_gpu[by*32]);  // RECALL: Weight matrix is made of row-major arranged blocks (hence the by),
+        													    // each containing 32 32-bit-columns.
+
+
+        // Here we perform a warp-level vector-vector binary multiplication using the
+        // common dimension between the input and weight matrices.
+        register int Cm[32] = {0};
+        for (int i=0; (i*32) < (p->input_width); i++)
+        {
+            unsigned r0 = input_sub[i*32*gdx + laneid]; // Ogni thread del warp legge una 32-bit sub-row della input matrix
+            unsigned r1 = weight_sub[i*32*gdy + laneid]; // Ogni thread del warp legge una 32-bit sub-column della weight matrix
+
+            #pragma unroll
+            for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
+            {
+            	// Original version: every thread has in charge a bit-row of the input matrix...
+            	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
+            	//		 This, of course, may be useful if one wants to get the output transposed for free.
+                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                Cm[j] += __popc(r0 ^ r2);
+            }
+        }
+
+        // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
+		#pragma unroll
+        for(uint8_t i = 0; i < 32; i++)
+        	Cm[i] = (int)p->input_width - 2 * Cm[i];
+
+
+
+        // Now, the threads within a warp must output the sub-matrix of 32x32 values they've built in:
+        // full precision and column-major format.
+        const uint32_t start_row = bx * 32;
+        const uint32_t end_row = min(start_row + 32, p->input_height);
+        const uint32_t start_column = by * 32;
+        const uint32_t end_column = min(start_column + 32, p->weights_width);
+
+        // Read the biases associated to the interval of the columns of the weight matrix involved
+        // by the output block presently considered by this warp. Uses coalescing.
+        float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
+
+
+        unsigned* output_sub = &(p->output_gpu[bx*(gdy*32) + by*32]); // Compute the output address for the sub-column to write.
+        unsigned val = 0;
+        for(uint32_t column = start_column; column < end_column; column++)
+        {
+            float bias_col = __shfl_sync(0xFFFFFFFF, bias, column - start_column); // Here each thread retrieves the bias to apply to this column
+            																	   // from the thread in the warp that has read it before.
+
+            if(start_row + laneid < end_row)
+        	{
+        		// DEBUG.
+        		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
+        				laneid, (float)Cm[column - start_column],
+						start_row + laneid, start_row, end_row,
+						column, start_column, end_column,
+						p->weights_width,
+						laneid,
+						column - start_column);*/
+
+
+        		// Read the final result of the binary multiplication.
+        		float res = (float)Cm[column - start_column];
+
+        		// Apply the bias associated with the currently considered column.
+        		res += bias_col;
+
+        		// Apply the GELU.
+        		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
+
+        		// Binarize the result and store it in "val" (i.e., each thread is binarizing its row).
+        		// Each thread must also ensure that the LSB becomes the MSB in the process (this explains the left shift).
+        		val = (val << 1) | (res >= 0);
+        	}
+        }
+
+        // Now, each thread writes out the rows of 32 values it had in charge in binarized format,
+        // and we use the coalescing in the process.
+        output_sub[laneid] = val;
     }
 }
