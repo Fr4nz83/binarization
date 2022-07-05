@@ -270,10 +270,6 @@ public:
 
 
 
-// *** MACROS *** //
-#define CEIL(X) (((X) + BITWIDTH - 1) >> LOG_BITWIDTH) // Equivalente a ceil(X/32)
-#define FEIL(X) ((((X) + BITWIDTH - 1) >> LOG_BITWIDTH) << LOG_BITWIDTH) // Equivalente a ceil(X/32)*32 (ovvero, il multiplo di 32 >= X)
-
 class BinaryMultiplicationLayer
 {
 public:
