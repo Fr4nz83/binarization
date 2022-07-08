@@ -277,8 +277,8 @@ public:
 	// *** PROTECTED FIELDS *** //
 
 	// Input fields.
-	float* input_gpu;
-	unsigned* input_bin_gpu;
+	float* input_gpu;			// Memory allocated for FP input.
+	unsigned* input_bin_gpu;	// Memory allocated for binarized input.
 	unsigned input_height;
 	unsigned input_width;
 
@@ -298,6 +298,7 @@ public:
 
 	// Layer general properties.
 	char name[8];
+	bool binarized_input;
 	bool transpose_output;
 	bool apply_gelu;
 
@@ -310,6 +311,7 @@ public:
 							  const unsigned& weigths_width,
 							  const float* weights,
 							  const float* bias,
+							  const bool& binarized_input = false,
 							  const bool& transpose_output = false,
 							  const bool& apply_gelu = true);
 	~BinaryMultiplicationLayer(){this->release();};
@@ -332,6 +334,9 @@ public:
 
 	inline int output_size() {return this->input_height * this->weights_width;}
 	inline int output_bytes() {return this->output_size() * sizeof(float);}
+    int output_bit_size() {return !this->transpose_output ? FEIL(this->input_height) * CEIL(this->weights_width) :
+    														CEIL(this->input_height) * FEIL(this->weights_width);}
+    int output_bit_bytes() {return output_bit_size() * sizeof(unsigned);}
 	inline int get_output_width() {return !this->transpose_output ? this->weights_width : this->input_height;}
 	inline int get_output_height() {return !this->transpose_output ? this->input_height : this->weights_width;}
 
@@ -342,10 +347,10 @@ public:
 	inline int get_weights_width() {return this->weights_width;}
 	inline int get_weights_height() {return this->weights_height;}
 
-	inline void load_input_gpu(float* input, unsigned input_height);
-	inline void set_input_gpu(float* input_gpu, unsigned input_height) {this->input_gpu = input_gpu; this->input_height = input_height;}
-
+	inline void load_input_gpu(void* input, unsigned input_height);
+	inline void set_input_gpu(void* input_gpu, unsigned input_height);
 	inline void allocate_output_gpu();
+
 	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
 

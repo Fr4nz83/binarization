@@ -339,6 +339,7 @@ int test_bin_multi()
 {
 	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
 	constexpr bool check_correctness = true;
+	constexpr bool binarized_input = false;
 	constexpr bool apply_gelu = true;
 	constexpr bool transposed_output_gpu = false;
 
@@ -396,6 +397,7 @@ int test_bin_multi()
 									weights_width,  // Activation units
 									weights_data,   // Pointer to the weights array
 									bias_data,	 	// Pointer to the bias vector
+									binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
@@ -413,7 +415,6 @@ int test_bin_multi()
 	cudaEventRecord(start);
 	std::cout << "Initializing the input and output of the layer..." << std::endl;
 	bm_l1.load_input_gpu(img_data, input_height);
-	bm_l1.allocate_output_gpu();
 	cudaEventRecord(end_load);
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...

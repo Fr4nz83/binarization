@@ -20,6 +20,7 @@ BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
 													 const unsigned& weigths_width,  // This corresponds to the number of hidden units.
 													 const float* weights,
 													 const float* bias,
+													 const bool& binarized_input,
 													 const bool& transpose_output,
 													 const bool& apply_gelu) :
 input_gpu(NULL),
@@ -32,6 +33,7 @@ weights_width(weigths_width),
 bias_gpu(NULL),
 output_gpu(NULL),
 gpu(NULL),
+binarized_input(binarized_input),
 transpose_output(transpose_output),
 apply_gelu(apply_gelu)
 {
@@ -119,14 +121,8 @@ void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const flo
 
 BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 {
-	// Dealloc data space (may be NULL in case this layer is connected to other layers).
-	if(this->input_gpu == NULL || this->input_size() == 0)
-	{
-		std::cout << "ERROR: Input data has not been allocated/initialized on the GPU." << std::endl;
-		exit(1);
-	}
-
-	if(this->input_bin_gpu == NULL || this->input_bit_size() == 0)
+	// Various sanity checks before executing the layer.
+	if(this->input_bin_gpu == NULL || this->input_size() == 0)
 	{
 		std::cout << "ERROR: Memory for binarized input has not been allocated!" << std::endl;
 		exit(1);
@@ -162,27 +158,59 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 	return this->gpu;
 }
 
-void BinaryMultiplicationLayer::load_input_gpu(float* input, unsigned input_height)
+void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_height)
 {
 	this->input_height = input_height;
 
-	// Check if we need to reset the state of the input.
-	if(this->input_gpu != NULL)
-		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
 
-	// Allocate the memory required by the FP input, and then copy the input data from CPU to GPU.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
-	std::cout << "Memory required by the FP input: " << this->input_bytes() << " bytes." << std::endl;
+	// Check if we need to reset the state of the input.
+	if(!this->binarized_input)
+	{
+		if(this->input_gpu != NULL)
+			CUDA_SAFE_CALL(cudaFree(this->input_gpu));
+
+		// Allocate the memory required by the FP input, and then copy the input data from CPU to GPU.
+		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
+		CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, (float*)input, this->input_bytes(), cudaMemcpyHostToDevice));
+		std::cout << "Memory required by the FP input: " << this->input_bytes() << " bytes." << std::endl;
+	}
+
 
 	// Check if we need to reset the state of the binarized input.
 	if(this->input_bin_gpu != NULL)
-		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
+		CUDA_SAFE_CALL(cudaFree(this->input_bin_gpu));
 
 	// Allocate the memory required by the binarized input, and then set the initial state of its elements to 0.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_bin_gpu), this->input_bit_bytes()));
-	CUDA_SAFE_CALL(cudaMemset(this->input_bin_gpu, 0, this->input_bit_bytes()));
+	if(this->binarized_input)
+	{
+		CUDA_SAFE_CALL(cudaMemcpy(this->input_bin_gpu, (unsigned*)input, this->input_bit_bytes(), cudaMemcpyHostToDevice));
+	}
+	else
+	{
+		CUDA_SAFE_CALL(cudaMemset(this->input_bin_gpu, 0, this->input_bit_bytes()));
+	}
 	std::cout << "Memory required by the binarized input: " << this->input_bit_bytes() << " bytes." << std::endl;
+
+
+	// Allocate the output of the GPU.
+	this->allocate_output_gpu();
+}
+
+inline void BinaryMultiplicationLayer::set_input_gpu(void* input_gpu, unsigned input_height)
+{
+	this->input_height = input_height;
+	if(this->binarized_input)
+	{
+		this->input_gpu = (float*)input_gpu;
+		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_bin_gpu), this->input_bit_bytes()));
+		CUDA_SAFE_CALL(cudaMemset(this->input_bin_gpu, 0, this->input_bit_bytes()));
+	}
+	else
+		this->input_bin_gpu = (unsigned*)input_gpu;
+
+	// Allocate the output of the GPU.
+	this->allocate_output_gpu();
 }
 
 void BinaryMultiplicationLayer::allocate_output_gpu()
@@ -207,11 +235,16 @@ void BinaryMultiplicationLayer::execute()
 	// 1 - Prepare the layer for execution.
 	BinaryMultiplicationLayer* gpu_copy = this->ready();
 
+
 	// 2 - Input binarization kernel execution.
-	std::cout << "Binarizing output..." << std::endl;
 	cudaEventRecord(start_bin);
-	Input_Binarization <<<1000, 128>>> (gpu_copy);
+	if(!this->binarized_input)
+	{
+		std::cout << "Binarizing input..." << std::endl;
+		Input_Binarization <<<1000, 128>>> (gpu_copy);
+	}
 	cudaEventRecord(end_bin);
+
 
 	// 3 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
