@@ -352,7 +352,7 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1024 * 100,	// # of input entries.
+	constexpr uint32_t input_height = 1024 * 10,	// # of input entries.
 					   weights_height = 1024 * 4,	// # of features
 					   weights_width = 128 * 2;		// # Activation units
 
@@ -503,12 +503,12 @@ int test_bin_multi()
 		bool check = true;
 		if(!transposed_output_gpu)
 		{
-			std::cout << "Check output GPU correctness with normal matrices..." << std::endl;
+			std::cout << "Checking output GPU correctness with normal matrices..." << std::endl;
 			check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
 		}
 		else
 		{
-			std::cout << "Check transposed output GPU correctness..." << std::endl;
+			std::cout << "Checking output GPU correctness when such output comes out transposed..." << std::endl;
 			float* transposed_mat = new float[input_height * weights_width];
 			transpose_matrix(res_cpu, transposed_mat, input_height, weights_width);
 			check = check_eq_matrices(transposed_mat, test_output, weights_width, input_height, eps);

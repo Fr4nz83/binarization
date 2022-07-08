@@ -570,7 +570,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
 // TODO: also, the pointer to binarized output must be appropriately handled by the class.
-__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
+/*__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
 	const uint8_t warpid = threadIdx.x / WARP_SIZE;
@@ -678,7 +678,7 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
     	// Write out the block of 32 32-bit-rows binarized by this warp (we use coalescing!).
 		output_sub[laneid] = val;
     }
-}
+}*/
 
 /**
  * @brief This kernel performs the binary multiplication between a binarized input matrix and a binarized weight matrix,
@@ -687,7 +687,7 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
 // TODO: also, the pointer to binarized output must be appropriately handled by the class.
-__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
+/*__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
 	const uint8_t warpid = threadIdx.x / WARP_SIZE;
@@ -766,13 +766,13 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
             if(start_row + laneid < end_row)
         	{
         		// DEBUG.
-        		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
+        		printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
         				laneid, (float)Cm[column - start_column],
 						start_row + laneid, start_row, end_row,
 						column, start_column, end_column,
 						p->weights_width,
 						laneid,
-						column - start_column);*/
+						column - start_column);
 
 
         		// Read the final result of the binary multiplication.
@@ -794,4 +794,4 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
         // and we use the coalescing in the process.
         output_sub[laneid] = val;
     }
-}
+}*/

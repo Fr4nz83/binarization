@@ -41,7 +41,7 @@ struct cifar_image_float
 	float G[H*W];   // Green channel.
 	float B[H*W];   // Blue channel.
 	
-	cifar_image_float() {};
+	cifar_image_float() : label(0) {};
 	
 	// Copy constructor from cifar_image.
 	cifar_image_float(const cifar_image<H, W>& obj)
