@@ -2,6 +2,7 @@
 
 - GCC >= 9.3
 - CUDA >= 11.X
+- cuDNN
 - Boost
 - JPEG
 - ZLIB
