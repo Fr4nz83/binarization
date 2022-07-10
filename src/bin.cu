@@ -81,7 +81,7 @@ int main_new()
 
     
 
-    //================ Setup Network layers =================
+    //================ Setup Network layers. =================
 
     // *** Fc1 Layer ***
     // NOTA: questo layer si aspetta una matrice dei pesi in formato row-major con #righe == #features e #colonne == #hidden_units. 
