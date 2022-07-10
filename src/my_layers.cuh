@@ -347,9 +347,9 @@ public:
 	inline int get_weights_width() {return this->weights_width;}
 	inline int get_weights_height() {return this->weights_height;}
 
+	inline void allocate_output_gpu();
 	inline void load_input_gpu(void* input, unsigned input_height);
 	inline void set_input_gpu(void* input_gpu, unsigned input_height);
-	inline void allocate_output_gpu();
 
 	inline float* get_output_gpu() {return this->output_gpu;}
 	inline void download_output_gpu(float* output);
