@@ -324,8 +324,12 @@ bool ConvLayer::set_input_gpu(float* input_gpu, const unsigned& batch_size)
 	std::cout << this->name << " => cuDNN input tensor descriptor allocation OK!" << std::endl;
 
 
+	// Allocate space for the output.
+	bool check = this->allocate_output_gpu();
+
+
 	// Sanity check on various pointers and data structures to ensure that the layer is ready to be executed.
-	return true;
+	return check;
 }
 
 bool ConvLayer::allocate_output_gpu()

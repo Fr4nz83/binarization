@@ -79,9 +79,6 @@ int test_convfp_layer()
 	// Load ConvLayer input data.
 	in_conv_layer.load_input(size_batch, img_data);
 
-	// Allocate space for output (and residuals, if needed).
-	in_conv_layer.allocate_output_gpu();
-
 	// Perform the last actions to prepare the layer for its execution.
 	in_conv_layer.ready();
 
@@ -258,14 +255,10 @@ int test_transpose_layer()
 	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
 
 
-	// 1 - Load input data from CPU to GPU.
+	// 1 - Load input data from CPU to GPU and allocate space for the output.
 	cudaEventRecord(start);
 	tr_l1.load_input_gpu(img_data, size_batch);
 	cudaEventRecord(end_load);
-
-
-	// 2 - Allocate output memory on GPU.
-	tr_l1.allocate_output_gpu();
 
 
 	// 3 - Prepare the layer for execution

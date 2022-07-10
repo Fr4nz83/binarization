@@ -71,11 +71,11 @@ public:
 	inline int get_output_channels() {return this->input_channels;}
 	inline int get_size_batch() {return this->size_batch;}
 
+	inline void allocate_output_gpu() {};
 	inline void load_input_gpu(float* input, unsigned size_batch);
 	inline void set_input_gpu(float* input_gpu, unsigned size_batch) { this->input_gpu = input_gpu; this->size_batch = size_batch;}
 
-	inline void allocate_output_gpu() {};
-	inline float* get_output_gpu() {return this->input_gpu;}
+	inline float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
 	inline void download_output_gpu(float* output);
 };
 
@@ -123,21 +123,22 @@ public:
 
 	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
 	inline int get_input_channels() {return this->input_channels;}
+
+	inline int output_size() {return this->input_size();}
+	inline int output_bytes() {return this->input_bytes();}
 	inline int get_output_width() {return this->input_height;}
 	inline int get_output_height() {return this->input_width;}
 	inline int get_output_channels() {return this->input_channels;}
 	inline int get_size_batch() {return this->size_batch;}
 
+	inline void allocate_output_gpu();
 	inline void load_input_gpu(float* input, unsigned size_batch);
 	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
 
-	inline void allocate_output_gpu();
-	inline float* get_output_gpu() {return this->output_gpu;}
+	inline float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
 	inline void download_output_gpu(float* output);
 };
 
@@ -233,16 +234,16 @@ public:
 
 	bool initialize_filters(const float* filters);
 
-	inline int get_size_batch() {return this->size_batch;}
-
 	// I/O charachteristics.
 	inline int input_size() {return this->input_channels*this->input_height*this->input_width*this->size_batch;}
 	inline int input_bytes() {return input_size() * sizeof(float);}
-	inline int output_size() {return this->output_channels * this->output_height * this->output_width * this->size_batch;}
-	inline int output_bytes() {return this->output_size() * sizeof(float);}
+	inline int get_input_batch() {return this->size_batch;}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
 	inline int get_input_channels() {return this->input_channels;}
+
+	inline int output_size() {return this->output_channels * this->output_height * this->output_width * this->size_batch;}
+	inline int output_bytes() {return this->output_size() * sizeof(float);}
 	inline int get_output_width() {return this->output_width;}
 	inline int get_output_height() {return this->output_height;}
 	inline int get_output_channels() {return this->output_channels;}
@@ -251,16 +252,15 @@ public:
 	inline int filter_size() {return this->output_channels * this->input_channels * this->filter_height * this->filter_width;}
 	inline int filter_bytes() {return this->filter_size() * sizeof(float);}
 
+	inline bool allocate_output_gpu();
 	inline bool load_input(const unsigned& batch_size, const float* img_data);
 	inline bool set_input_gpu(float* input_gpu, const unsigned& batch_size);
 
-	inline bool allocate_output_gpu();
-	inline float* get_output_gpu() {return this->output_gpu;}
+	inline float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
 	void download_output_gpu(float* output);
 
-	inline float* get_residual_gpu(){return this->save_residual_gpu;}
+	inline float* get_residual_gpu(){auto tmp = this->save_residual_gpu; this->save_residual_gpu = NULL; return tmp;}
 	void download_residual_gpu(float* residual);
-
 
 	bool execute_layer();
 };
