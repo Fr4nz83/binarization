@@ -232,7 +232,7 @@ inline void BinaryMultiplicationLayer::set_input_gpu(void* input_gpu, unsigned i
 	this->allocate_output_gpu();
 }
 
-void BinaryMultiplicationLayer::download_output_gpu(float* output)
+void BinaryMultiplicationLayer::download_output_gpu(void* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }

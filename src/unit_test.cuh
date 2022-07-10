@@ -390,7 +390,7 @@ int test_bin_multi()
 	//=============== Set up layer =================
 
 
-	// 1 - Instantiate the batch normalization layer.
+	// 1 - Instantiate the binary multiplication layer.
 	std::cout << "Initializing the FC layer (with binary multiplication and FP output)..." << std::endl;
 	BinaryMultiplicationLayer bm_l1("mb_1",
 									weights_height, // Input features
@@ -531,6 +531,194 @@ int test_bin_multi()
 	cudaEventDestroy(end_load);
 	cudaEventDestroy(end_mult);
 	cudaEventDestroy(stop);
+
+
+	return 0;
+}
+
+/**
+ * @brief Full precision batch normalization unit test.
+ */
+int test_bin_multi_bin_input()
+{
+	std::cout << "*** Binary multiplication layer WITH binarized input unit test *** " << std::endl;
+	constexpr bool check_correctness = true;
+	constexpr bool binarized_input = true;
+	constexpr bool apply_gelu = true;
+	constexpr bool transposed_output_gpu = false;
+
+
+
+    //=============== Device Configuration =================
+	int dev = 0;
+	cudaSetDevice(dev);
+
+
+
+	//=============== Read image dataset =================
+
+	constexpr uint32_t input_height = 1024 * 10,	// # of input entries.
+					   weights_height = 1024 * 4,	// # of features
+					   weights_width = 128 * 2;		// # Activation units
+
+	// Generate a random matrix representing the image dataset.
+	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
+	float *img_data = tmp_img.data();
+	std::cout << "Input matrix properties => ROWS:" << input_height << " COLS:" << weights_height << std::endl;
+	std::cout << "Size input: " << tmp_img.size() * sizeof(float) << " bytes" << std::endl;
+
+
+	//=============== Read weigths =================
+
+	std::vector<float> tmp_w = gen_matrix(weights_height, weights_width);
+	float *weights_data = tmp_w.data();
+	std::cout << "Weight matrix properties => ROWS:" << weights_height << " COLS:" << weights_width << std::endl;
+	std::cout << "Size weights: " << tmp_w.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	//=============== Read biases =================
+
+	std::vector<float> tmp_b = gen_matrix(1, weights_width);
+	float *bias_data = tmp_b.data();
+	std::cout << "Bias vector properties => COLS:" << weights_width << std::endl;
+	std::cout << "Size bias: " << tmp_b.size() * sizeof(float) << " bytes" << std::endl;
+
+
+
+	std::cout << "Output matrix (non-transposed) properties => ROWS:" << input_height << " COLS:" << weights_width << std::endl;
+	std::cout << "Size output: " << input_height * weights_width * sizeof(float) << " bytes" << std::endl;
+
+
+
+	//=============== Set up layer =================
+
+
+	// 1 - Instantiate the binary multiplication layer used only to get the binarized input.
+	BinaryMultiplicationLayer bm_l1("mb_1",
+									weights_height, // Input features
+									weights_width,  // Activation units
+									weights_data,   // Pointer to the weights array
+									bias_data,	 	// Pointer to the bias vector
+									false, // Flag indicating whether the input given to the layer has already been binarized.
+									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
+									apply_gelu);	// Flag indicating whether the GELU has to be applied.
+
+	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
+	std::cout << "Binarizing the input matrix..." << std::endl;
+	bm_l1.load_input_gpu(img_data, input_height);
+	bm_l1.execute();
+
+
+	// 3 - Here we instantiate the binary multiplication layer which actually takes in input a binarized input array.
+	BinaryMultiplicationLayer bm_l2("mb_2",
+									weights_height, // Input features
+									weights_width,  // Activation units
+									weights_data,   // Pointer to the weights array
+									bias_data,	 	// Pointer to the bias vector
+									binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
+									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
+									apply_gelu);	// Flag indicating whether the GELU has to be applied.
+
+
+	// 4 - Here we get the binarized input matrix from the first layer, and then execute the second layer.
+	bm_l2.set_input_gpu(bm_l1.get_ptr_input_bin_gpu(), input_height);
+	bm_l2.execute();
+
+
+	// 5 - Retrieve the GPU output from the second layer.
+	std::cout << "Size output: " << bm_l2.output_bytes() << " bytes" << std::endl;
+	float *test_output = new float[bm_l2.output_size()];
+	bm_l2.download_output_gpu(test_output);
+
+
+
+	// *** Verify GPU output correctness *** //
+	if(check_correctness)
+	{
+		// Trasformazione in 1/-1 dell'input
+		std::cout << "Trasformazione CPU 1/-1 matrice input" << std::endl;
+		float *img_data_trans = new float[tmp_img.size()];
+		transform_array_ones(img_data, tmp_img.size(), img_data_trans);
+
+		// std::cout << "Stampa matrice input originaria..." << std::endl;
+		// print_array(img_data, input_height, weights_height);
+
+		// std::cout << "Stampa matrice input 1/-1..." << std::endl;
+		// print_array(img_data_trans, input_height, weights_height);
+
+
+
+		// Trasformazione in 1/-1 della matrice dei pesi.
+		std::cout << "Trasformazione CPU 1/-1 matrice pesi" << std::endl;
+		float *weights_trans = new float[tmp_w.size()];
+		transform_array_ones(weights_data, tmp_w.size(), weights_trans);
+
+		// std::cout << "Stampa matrice pesi originaria..." << std::endl;
+		// print_array(weights_data, weights_height, weights_width);
+
+		// std::cout << "Stampa matrice pesi 1/-1..." << std::endl;
+		// print_array(weights_trans, weights_height, weights_width);
+
+
+		// Calcolo moltiplicazione input x pesi con valori 1/-1.
+		float *res_cpu = new float[input_height * weights_width];
+		std::cout << "Calcolo moltiplicazione 1/-1 input x pesi su CPU" << std::endl;
+		matrix_multiplication(img_data_trans, weights_trans,
+							  input_height, weights_width, weights_height,
+							  res_cpu);
+
+		// Apply the bias to the output matrix.
+		std::cout << "Applicazione bias alla output matrix" << std::endl;
+		apply_bias_matrix(res_cpu, input_height, weights_width, bias_data);
+
+		// Apply the GELU to the output matrix.
+		if(apply_gelu)
+		{
+			std::cout << "Applicazione GELU alla output matrix" << std::endl;
+			apply_gelu_matrix(res_cpu, input_height * weights_width);
+		}
+
+		/*std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		print_array(res_cpu, input_height, weights_width);*/
+
+		/*std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+		if(!transposed_output_gpu)
+			print_array(test_output, input_height, weights_width);
+		else
+		{
+			std::cout << "NOTE: the output matrix has been transposed by the GPU!" << std::endl;
+			print_array(test_output, weights_width, input_height);
+		}*/
+
+
+		constexpr float eps = 1e-5;
+		bool check = true;
+		if(!transposed_output_gpu)
+		{
+			std::cout << "Checking output GPU correctness with normal matrices..." << std::endl;
+			check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
+		}
+		else
+		{
+			std::cout << "Checking output GPU correctness when such output comes out transposed..." << std::endl;
+			float* transposed_mat = new float[input_height * weights_width];
+			transpose_matrix(res_cpu, transposed_mat, input_height, weights_width);
+			check = check_eq_matrices(transposed_mat, test_output, weights_width, input_height, eps);
+			delete[] transposed_mat;
+		}
+		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+		// Dealloc the resources in the heap that have been used to check the GPU output correctness.
+		delete[] img_data_trans;
+		delete[] weights_trans;
+		delete[] res_cpu;
+	}
+
+
+	// Dealloc the various resources used within this function.
+	delete[] test_output;
 
 
 	return 0;

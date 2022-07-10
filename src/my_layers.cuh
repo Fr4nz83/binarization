@@ -331,6 +331,7 @@ public:
     int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
+	inline unsigned* get_ptr_input_bin_gpu() {auto tmp = this->input_bin_gpu; this->input_bin_gpu = NULL; return tmp;} // Used only for debugging purposes.
 
 	inline int output_size() {return this->input_height * this->weights_width;}
 	inline int output_bytes() {return this->output_size() * sizeof(float);}
@@ -351,8 +352,8 @@ public:
 	inline void load_input_gpu(void* input, unsigned input_height);
 	inline void set_input_gpu(void* input_gpu, unsigned input_height);
 
-	inline float* get_output_gpu() {return this->output_gpu;}
-	inline void download_output_gpu(float* output);
+	inline void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline void download_output_gpu(void* output);
 
 	inline void execute();
 };
