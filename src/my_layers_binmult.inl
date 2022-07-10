@@ -847,13 +847,13 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
             if(start_row + laneid < end_row)
         	{
         		// DEBUG.
-        		printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
+        		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
         				laneid, (float)Cm[column - start_column],
 						start_row + laneid, start_row, end_row,
 						column, start_column, end_column,
 						p->weights_width,
 						laneid,
-						column - start_column);
+						column - start_column);*/
 
 
         		// Read the final result of the binary multiplication.
