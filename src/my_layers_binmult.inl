@@ -652,7 +652,6 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
  * 		  block contains 32 32-bit-rows.
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
-// TODO: also, the pointer to binarized output must be appropriately handled by the class.
 __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
@@ -753,7 +752,7 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
         		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
         	}
 
-        	// Collectively binarize the row
+        	// Collectively binarize the row currently considered...
         	unsigned res_row_bin = __brev(__ballot_sync(0xFFFFFFFF, res >= 0));
         	if(laneid == (row - start_row)) val = res_row_bin;
         }
@@ -769,7 +768,6 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
  * 		  The binarized output matrix has its blocks arranged in column-major format, and each block contains 32 32-bit-rows.
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
-// TODO: also, the pointer to binarized output must be appropriately handled by the class.
 __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
