@@ -292,6 +292,7 @@ public:
 
 	// Output fields.
 	float* output_gpu;
+	unsigned* output_bin_gpu;
 
 	// GPU shadow.
 	BinaryMultiplicationLayer* gpu;
@@ -299,6 +300,7 @@ public:
 	// Layer general properties.
 	char name[8];
 	bool binarized_input;
+	bool binarize_output;
 	bool transpose_output;
 	bool apply_gelu;
 
@@ -312,6 +314,7 @@ public:
 							  const float* weights,
 							  const float* bias,
 							  const bool& binarized_input = false,
+							  const bool& binarized_output = false,
 							  const bool& transpose_output = false,
 							  const bool& apply_gelu = true);
 	~BinaryMultiplicationLayer(){this->release();};
@@ -352,7 +355,13 @@ public:
 	inline void load_input_gpu(void* input, unsigned input_height);
 	inline void set_input_gpu(void* input_gpu, unsigned input_height);
 
-	inline void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline void* get_output_gpu()
+	{
+		void* tmp = !this->binarize_output ? (void*)this->output_gpu : (void*)this->output_bin_gpu;
+		if(this->binarize_output == false) this->output_gpu = NULL;
+		else this->output_bin_gpu = NULL;
+		return tmp;
+	}
 	inline void download_output_gpu(void* output);
 
 	inline void execute();

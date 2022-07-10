@@ -33,8 +33,8 @@ int main()
 	//test_convfp_layer();
 	//test_bnfp_layer();
 	//test_transpose_layer();
-	// test_bin_multi();
-	test_bin_multi_bin_input();
+	test_bin_multi();
+	// test_bin_multi_bin_input();
 	std::cout << "Test units executed!" << std::endl;
 
 
@@ -101,7 +101,7 @@ int main_new()
     
     
     
-    cudaEvent_t start, end_load, end_ops; 
+    cudaEvent_t start, end_load, end_ops;
     cudaEventCreate(&start); cudaEventCreate(&end_load); cudaEventCreate(&end_ops);
     double tot_time = 0, tot_time_comp = 0;
     constexpr uint32_t rounds = 1;

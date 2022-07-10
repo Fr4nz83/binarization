@@ -21,6 +21,7 @@ BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
 													 const float* weights,
 													 const float* bias,
 													 const bool& binarized_input,
+													 const bool& binarize_output,
 													 const bool& transpose_output,
 													 const bool& apply_gelu) :
 input_gpu(NULL),
@@ -32,8 +33,10 @@ weights_height(weigths_height),
 weights_width(weigths_width),
 bias_gpu(NULL),
 output_gpu(NULL),
+output_bin_gpu(NULL),
 gpu(NULL),
 binarized_input(binarized_input),
+binarize_output(binarize_output),
 transpose_output(transpose_output),
 apply_gelu(apply_gelu)
 {
@@ -86,6 +89,12 @@ void BinaryMultiplicationLayer::release()
 		CUDA_SAFE_CALL( cudaFree(this->output_gpu) );
 		this->output_gpu = NULL;
 	}
+
+	if(this->output_bin_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->output_bin_gpu) );
+		this->output_bin_gpu = NULL;
+	}
 }
 
 void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const float* bias)
@@ -134,14 +143,18 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 		exit(1);
 	}
 
-	// Dealloc scale factors vector.
+	if(this->binarize_output && (this->output_bin_gpu == NULL || this->output_bit_size() == 0))
+	{
+		std::cout << "ERROR: Space for binarized output has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
 	if(this->weights_gpu == NULL)
 	{
 		std::cout << "ERROR: Weights have not been copied to the GPU." << std::endl;
 		exit(1);
 	}
 
-	// Dealloc shift factors vector.
 	if(this->bias_gpu == NULL)
 	{
 		std::cout << "ERROR: Biases have not been copied to the GPU." << std::endl;
@@ -161,7 +174,14 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 void BinaryMultiplicationLayer::allocate_output_gpu()
 {
 	// Allocate space for output.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->output_bytes()));
+	if(this->binarize_output == false)
+	{
+		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->output_bytes()));
+	}
+	else
+	{
+		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_bin_gpu), this->output_bit_bytes()));
+	}
 }
 
 void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_height)
@@ -234,7 +254,14 @@ inline void BinaryMultiplicationLayer::set_input_gpu(void* input_gpu, unsigned i
 
 void BinaryMultiplicationLayer::download_output_gpu(void* output)
 {
-	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+	if(this->binarize_output == false)
+	{
+		CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+	}
+	else
+	{
+		CUDA_SAFE_CALL(cudaMemcpy(output, this->output_bin_gpu, this->output_bit_bytes(), cudaMemcpyDeviceToHost));
+	}
 }
 
 void BinaryMultiplicationLayer::execute()
@@ -262,9 +289,19 @@ void BinaryMultiplicationLayer::execute()
 	// 3 - Input binarization kernel execution.
 	std::cout << "Binary matrix multiplication..." << std::endl;
 	if(!this->transpose_output)
-		Mat_BinMul <<<10000, 32>>> (gpu_copy);
+	{
+		if(!this->binarize_output)
+			Mat_BinMul <<<10000, 32>>> (gpu_copy);
+		else
+			Mat_BinMul_OutBin <<<10000, 32>>> (gpu_copy);
+	}
 	else
-		Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
+	{
+		if(!this->binarize_output)
+			Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
+		else
+			Mat_BinMul_T_OutBin <<<10000, 32>>> (gpu_copy);
+	}
 	cudaEventRecord(end_mult);
 	cudaEventSynchronize(end_mult);
 
@@ -616,7 +653,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
 // TODO: also, the pointer to binarized output must be appropriately handled by the class.
-/*__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
+__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
 	const uint8_t warpid = threadIdx.x / WARP_SIZE;
@@ -693,7 +730,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
 
 
         // Write out the binarized output block that has been assigned to this warp.
-        unsigned* output_sub = &(p->output_gpu[by*(gdx*32) + bx*32]);
+        unsigned* output_sub = &(p->output_bin_gpu[by*(gdx*32) + bx*32]);
         unsigned val = 0;
         for(uint32_t row = start_row; row < end_row; row++)
         {
@@ -724,7 +761,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
     	// Write out the block of 32 32-bit-rows binarized by this warp (we use coalescing!).
 		output_sub[laneid] = val;
     }
-}*/
+}
 
 /**
  * @brief This kernel performs the binary multiplication between a binarized input matrix and a binarized weight matrix,
@@ -733,7 +770,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
  */
 // TODO: the kernel should be ready, it has to be tested for correctness.
 // TODO: also, the pointer to binarized output must be appropriately handled by the class.
-/*__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
+__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;
 	const uint8_t warpid = threadIdx.x / WARP_SIZE;
@@ -802,7 +839,7 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
         float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
 
 
-        unsigned* output_sub = &(p->output_gpu[bx*(gdy*32) + by*32]); // Compute the output address for the sub-column to write.
+        unsigned* output_sub = &(p->output_bin_gpu[bx*(gdy*32) + by*32]); // Compute the output address for the sub-column to write.
         unsigned val = 0;
         for(uint32_t column = start_column; column < end_column; column++)
         {
@@ -840,4 +877,4 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
         // and we use the coalescing in the process.
         output_sub[laneid] = val;
     }
-}*/
+}

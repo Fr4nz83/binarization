@@ -340,6 +340,7 @@ int test_bin_multi()
 	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
 	constexpr bool check_correctness = true;
 	constexpr bool binarized_input = false;
+	constexpr bool binarize_output = false;
 	constexpr bool apply_gelu = true;
 	constexpr bool transposed_output_gpu = false;
 
@@ -398,6 +399,7 @@ int test_bin_multi()
 									weights_data,   // Pointer to the weights array
 									bias_data,	 	// Pointer to the bias vector
 									binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
+									binarize_output, // Flag indicating whether the output produced by the layer must be binarized or not.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
@@ -544,6 +546,7 @@ int test_bin_multi_bin_input()
 	std::cout << "*** Binary multiplication layer WITH binarized input unit test *** " << std::endl;
 	constexpr bool check_correctness = true;
 	constexpr bool binarized_input = true;
+	constexpr bool binarize_output = false;
 	constexpr bool apply_gelu = true;
 	constexpr bool transposed_output_gpu = false;
 
@@ -600,7 +603,8 @@ int test_bin_multi_bin_input()
 									weights_width,  // Activation units
 									weights_data,   // Pointer to the weights array
 									bias_data,	 	// Pointer to the bias vector
-									false, // Flag indicating whether the input given to the layer has already been binarized.
+									!binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
+									binarize_output, // Flag indicating whether the output produced by the layer must be binarized or not.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
@@ -617,6 +621,7 @@ int test_bin_multi_bin_input()
 									weights_data,   // Pointer to the weights array
 									bias_data,	 	// Pointer to the bias vector
 									binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
+									binarize_output, // Flag indicating whether the output produced by the layer must be binarized or not.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
