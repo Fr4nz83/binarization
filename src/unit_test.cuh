@@ -24,7 +24,7 @@
 
 
 /**
- * @brief Full precision convolution layer test unit.
+ * @brief Full precision NCHW convolution layer test unit.
  */
 int test_convfp_layer()
 {
@@ -97,7 +97,7 @@ int test_convfp_layer()
 }
 
 /**
- * @brief Full precision batch normalization unit test.
+ * @brief Full precision NCHW batch normalization unit test.
  */
 int test_bnfp_layer()
 {
@@ -213,7 +213,9 @@ int test_bnfp_layer()
 	return 0;
 }
 
-
+/**
+ * @brief NCHW transposition layer unit test.
+ */
 int test_transpose_layer()
 {
 	std::cout << "*** FP matrix transposition layer unit test *** " << std::endl;
@@ -326,7 +328,7 @@ int test_transpose_layer()
 }
 
 /**
- * @brief Full precision batch normalization unit test.
+ * @brief Binary matrix multiplication layer with full precision output (non-transposed and transposed) unit test.
  */
 int test_bin_multi()
 {
@@ -532,7 +534,7 @@ int test_bin_multi()
 }
 
 /**
- * @brief Full precision batch normalization unit test.
+ * @brief Binary matrix multiplication layer with binarized input unit test.
  */
 int test_bin_multi_bin_input()
 {
@@ -723,7 +725,7 @@ int test_bin_multi_bin_input()
 }
 
 /**
- * @brief Full precision batch normalization unit test.
+ * @brief Binary matrix multiplication layer with binarized output (non-transposed and transposed) unit test.
  */
 int test_bin_multi_bin_out()
 {
@@ -744,7 +746,7 @@ int test_bin_multi_bin_out()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 10000,	// # of input entries.
+	constexpr uint32_t input_height = 3000,	// # of input entries.
 					   weights_height = 1000,	// # of features
 					   weights_width = 1000;		// # Activation units
 
@@ -872,14 +874,22 @@ int test_bin_multi_bin_out()
 		}
 
 
-		// Binarize the output matrix.
+		// Transform the values in the CPU output matrix into 1/-1.
 		std::cout << "Binarizzazione output CPU" << std::endl;
 		float *res_cpu_trans = new float[input_height * weights_width];
 		transform_array_ones(res_cpu, input_height * weights_width, res_cpu_trans);
 
 
-		//std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-		//print_array(res_cpu_trans, input_height, weights_width);
+		/*std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		if(transposed_output_gpu == false)
+			print_array(res_cpu_trans, input_height, weights_width);
+		else
+		{
+			float* transposed_mat = new float[input_height * weights_width];
+			transpose_matrix(res_cpu_trans, transposed_mat, input_height, weights_width);
+			print_array(res_cpu_trans, weights_width, input_height);
+			delete[] transposed_mat;
+		}*/
 
 		//std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
 		//print_binarized_array(test_output, input_height, weights_width);
@@ -887,14 +897,33 @@ int test_bin_multi_bin_out()
 
 
 		bool check = true;
-		std::cout << "Checking output GPU correctness with non-transposed matrices..." << std::endl;
-		check = check_eq_matrices_binarized(res_cpu_trans, test_output, input_height, weights_width);
+		if(transposed_output_gpu == false)
+		{
+			std::cout << "Checking output GPU correctness with non-transposed matrices..." << std::endl;
+			check = check_eq_matrices_binarized(res_cpu_trans, test_output, input_height, weights_width);
+		}
+		else
+		{
+			std::cout << "Checking output GPU correctness when such output comes out transposed..." << std::endl;
+			float* transposed_mat = new float[input_height * weights_width];
+			transpose_matrix(res_cpu_trans, transposed_mat, input_height, weights_width);
+			check = check_eq_matrices_binarized(transposed_mat, test_output, weights_width, input_height);
+			delete[] transposed_mat;
+		}
 		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
 
 
 		check = true;
-		std::cout << "Checking padding correctness within the output GPU matrix..." << std::endl;
-		check = verify_padding_binarized_matrix(test_output, input_height, weights_width);
+		if(transposed_output_gpu == false)
+		{
+			std::cout << "Checking padding correctness within the non-transposed output GPU matrix..." << std::endl;
+			check = verify_padding_binarized_matrix(test_output, input_height, weights_width);
+		}
+		else
+		{
+			std::cout << "Checking padding correctness within the transposed output GPU matrix..." << std::endl;
+			check = verify_padding_binarized_matrix(test_output, weights_width, input_height);
+		}
 		std::cout << "Check correctness padding within output GPU: " << (check ? "OK" : "KO") << std::endl;
 
 
