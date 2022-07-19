@@ -33,8 +33,9 @@ int main()
 	//test_convfp_layer();
 	//test_bnfp_layer();
 	//test_transpose_layer();
-	// test_bin_multi();
-	// test_bin_multi_bin_input();
+
+	//test_bin_multi();
+	//test_bin_multi_bin_input();
 	test_bin_multi_bin_out();
 	std::cout << "Test units executed!" << std::endl;
 

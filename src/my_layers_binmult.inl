@@ -666,7 +666,6 @@ __global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p)
  * 		  and produces the output matrix in binarized format, where the blocks are arranged in column-major format and each
  * 		  block contains 32 32-bit-rows.
  */
-// TODO: the kernel should be ready, it has to be tested for correctness.
 __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
 {
     constexpr uint32_t WARP_SIZE = 32;

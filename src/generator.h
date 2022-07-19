@@ -31,6 +31,11 @@ void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols);
 void print_binarized_array(const unsigned* arr, const uint32_t& rows, const uint32_t& cols);
 
 void transpose_matrix(const float* src, float* dest, const uint32_t& rows, const uint32_t& cols);
+
 bool check_eq_matrices(const float* mat1, const float* mat2,
 					   const uint32_t& rows, const uint32_t& cols,
 					   const float eps);
+bool check_eq_matrices_binarized(const float* mat1, const unsigned* mat2,
+					   	   	     const uint32_t& rows, const uint32_t& cols);
+
+bool verify_padding_binarized_matrix(const unsigned* mat, const uint32_t& rows, const uint32_t& cols);

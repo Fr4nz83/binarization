@@ -135,14 +135,31 @@ void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)
 
 void print_binarized_array(const unsigned* arr, const uint32_t& rows, const uint32_t& cols)
 {
-	const uint32_t num_blocks = FEIL(rows) * CEIL(cols);
+	// NOTE: here we assume that each block contains 32 32-bit rows, and that the blocks
+	// 		 are arranged according to the column-major layout, i.e., we have "#CEIL(cols)" binarized stripes
+	// 	     of "num_rows x 32 cols" bit matrices arranged consecutively.
+
+	const int gdx = CEIL(rows); // Height of the binarized output matrix.
+	const int gdy = CEIL(cols); // Width of the binarized output matrix.
 
 	for(uint32_t row = 0; row < rows; row++)
 	{
+		std::cout << "Line " << row << ": ";
 		for(uint32_t col = 0; col < cols; col++)
 		{
+			// Compute the memory offset of the bit containing the element (bit) of the output we want to print.
+			// unsigned* ptr = &arr[by*(gdx*32) + bx*32];
+			const unsigned by = col / 32;
+			unsigned val = arr[by*(gdx*32) + row];
 
+			// Now, determine the value of the bit (while keeping in mind that the bits have been reversed in each word),
+			// and then translate it to the corresponding float value.
+			const unsigned mask = ((unsigned) 1) << (31 - (col % 32));
+			const float res = val & mask ? 1. : -1.;
+
+			std::cout << res << " ";
 		}
+		std::cout << std::endl;
 	}
 }
 
@@ -161,11 +178,84 @@ bool check_eq_matrices(const float* mat1, const float* mat2,
 	for(uint32_t row = 0; row < rows; row++)
 	{
 		for(uint32_t col = 0; col < cols; col++)
-			if(std::abs(mat1[row * cols + col] - mat2[row * cols + col] > eps))
+			if(std::abs(mat1[row * cols + col] - mat2[row * cols + col]) > eps)
 			{
 				check = false;
 				break;
 			}
+	}
+
+	return check;
+}
+
+bool check_eq_matrices_binarized(const float* mat1, const unsigned* mat2,
+					   	   	     const uint32_t& rows, const uint32_t& cols)
+{
+	// NOTE: here we assume that each block contains 32 32-bit rows, and that the blocks
+	// 		 are arranged according to the column-major layout, i.e., we have "#CEIL(cols)" binarized stripes
+	// 	     of "num_rows x 32 cols" bit matrices arranged consecutively.
+
+	const int gdx = CEIL(rows); // Height of the binarized output matrix.
+	const int gdy = CEIL(cols); // Width of the binarized output matrix.
+
+
+	bool check = true;
+	for(uint32_t row = 0; row < rows; row++)
+	{
+		for(uint32_t col = 0; col < cols; col++)
+		{
+			// Compute the memory offset of the bit containing the element (bit) of the output we want to print.
+			const unsigned by = col / 32;
+			unsigned val = mat2[by*(gdx*32) + row];
+
+			// Now, determine the value of the bit (while keeping in mind that the bits have been reversed in each word),
+			// and then translate it to the corresponding float value.
+			const unsigned mask = ((unsigned) 1) << (31 - (col % 32));
+			const float res = val & mask ? 1. : -1.;
+
+			if(mat1[row * cols + col] != res)
+			{
+				check = false;
+				break;
+			}
+		}
+	}
+
+	return check;
+}
+
+bool verify_padding_binarized_matrix(const unsigned* mat, const uint32_t& rows, const uint32_t& cols)
+{
+	// NOTE: here we assume that each block contains 32 32-bit rows, and that the blocks
+	// 		 are arranged according to the column-major layout, i.e., we have "#CEIL(cols)" binarized stripes
+	// 	     of "num_rows x 32 cols" bit matrices arranged consecutively.
+
+	const int gdx = CEIL(rows); // Height of the binarized output matrix.
+	const int gdy = CEIL(cols); // Width of the binarized output matrix.
+
+	std::cout << "Boundary rows: " << FEIL(rows) << " (" << rows << ")" << std::endl;
+	std::cout << "Boundary columns: " << FEIL(cols) << " (" << cols << ")" << std::endl;
+
+	bool check = true;
+	for(uint32_t row = rows; row < FEIL(rows); row++)
+	{
+		for(uint32_t col = cols; col < FEIL(cols); col++)
+		{
+			// Compute the memory offset of the bit containing the element (bit) of the output we want to print.
+			const unsigned by = col / 32;
+			unsigned val = mat[by*(gdx*32) + row];
+
+			// Now, determine the value of the bit (while keeping in mind that the bits have been reversed in each word),
+			// and then translate it to the corresponding float value.
+			const unsigned mask = ((unsigned) 1) << (31 - (col % 32));
+			const float res = val & mask ? 1. : -1.;
+
+			if(res != -1.)
+			{
+				check = false;
+				break;
+			}
+		}
 	}
 
 	return check;

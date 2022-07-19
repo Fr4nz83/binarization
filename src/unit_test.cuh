@@ -347,9 +347,9 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 1024 * 10,	// # of input entries.
-					   weights_height = 1024 * 4,	// # of features
-					   weights_width = 128 * 2;		// # Activation units
+	constexpr uint32_t input_height = 40000,	// # of input entries.
+					   weights_height = 1000,	// # of features
+					   weights_width = 1000;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -728,7 +728,7 @@ int test_bin_multi_bin_input()
 int test_bin_multi_bin_out()
 {
 	std::cout << "*** Binary multiplication layer unit test with binarized output *** " << std::endl;
-	constexpr bool check_correctness = false;
+	constexpr bool check_correctness = true;
 	constexpr bool binarized_input = false;
 	constexpr bool binarize_output = true;
 	constexpr bool apply_gelu = true;
@@ -744,9 +744,9 @@ int test_bin_multi_bin_out()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 4,	// # of input entries.
-					   weights_height = 3,	// # of features
-					   weights_width = 3;		// # Activation units
+	constexpr uint32_t input_height = 5000,	// # of input entries.
+					   weights_height = 1000,	// # of features
+					   weights_width = 1000;		// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -774,7 +774,7 @@ int test_bin_multi_bin_out()
 
 
 	std::cout << "Output matrix (non-transposed) properties => ROWS:" << input_height << " COLS:" << weights_width << std::endl;
-	std::cout << "Size output: " << input_height * weights_width * sizeof(float) << " bytes" << std::endl;
+	std::cout << "Size binarized output: " << FEIL(input_height) * CEIL(weights_width) * sizeof(unsigned) << " bytes" << std::endl;
 
 
 
@@ -878,38 +878,24 @@ int test_bin_multi_bin_out()
 		transform_array_ones(res_cpu, input_height * weights_width, res_cpu_trans);
 
 
-		std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-		print_array(res_cpu, input_height, weights_width);
+		// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		// print_array(res_cpu_trans, input_height, weights_width);
 
-		std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
-		if(!transposed_output_gpu)
-		{
-			print_binarized_array(test_output, input_height, weights_width);
-		}
-		else
-		{
-			std::cout << "NOTE: the output matrix has been transposed by the GPU!" << std::endl;
-			print_binarized_array(test_output, weights_width, input_height);
-		}
+		// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+		// print_binarized_array(test_output, input_height, weights_width);
 
 
 
-		/*constexpr float eps = 1e-5;
 		bool check = true;
-		if(!transposed_output_gpu)
-		{
-			std::cout << "Checking output GPU correctness with normal matrices..." << std::endl;
-			check = check_eq_matrices(res_cpu, test_output, input_height, weights_width, eps);
-		}
-		else
-		{
-			std::cout << "Checking output GPU correctness when such output comes out transposed..." << std::endl;
-			float* transposed_mat = new float[input_height * weights_width];
-			transpose_matrix(res_cpu, transposed_mat, input_height, weights_width);
-			check = check_eq_matrices(transposed_mat, test_output, weights_width, input_height, eps);
-			delete[] transposed_mat;
-		}
-		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;*/
+		std::cout << "Checking output GPU correctness with non-transposed matrices..." << std::endl;
+		check = check_eq_matrices_binarized(res_cpu_trans, test_output, input_height, weights_width);
+		std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+		check = true;
+		std::cout << "Checking padding correctness within the output GPU matrix..." << std::endl;
+		check = verify_padding_binarized_matrix(test_output, input_height, weights_width);
+		std::cout << "Check correctness padding within output GPU: " << (check ? "OK" : "KO") << std::endl;
 
 
 		// Dealloc the resources in the heap that have been used to check the GPU output correctness.
