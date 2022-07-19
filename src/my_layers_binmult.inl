@@ -137,16 +137,21 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 		exit(1);
 	}
 
-	if(this->output_gpu == NULL || this->output_size() == 0)
+	if(this->binarize_output)
 	{
-		std::cout << "ERROR: Output has not been allocated/initialized on the GPU." << std::endl;
-		exit(1);
+		if(this->output_bin_gpu == NULL || this->output_bit_bytes() == 0)
+		{
+			std::cout << "ERROR: Space for binarized output has not been allocated/initialized on the GPU." << std::endl;
+			exit(1);
+		}
 	}
-
-	if(this->binarize_output && (this->output_bin_gpu == NULL || this->output_bit_size() == 0))
+	else
 	{
-		std::cout << "ERROR: Space for binarized output has not been allocated/initialized on the GPU." << std::endl;
-		exit(1);
+		if(this->output_gpu == NULL || this->output_bytes() == 0)
+		{
+			std::cout << "ERROR: Output has not been allocated/initialized on the GPU." << std::endl;
+			exit(1);
+		}
 	}
 
 	if(this->weights_gpu == NULL)
@@ -291,16 +296,26 @@ void BinaryMultiplicationLayer::execute()
 	if(!this->transpose_output)
 	{
 		if(!this->binarize_output)
+		{
 			Mat_BinMul <<<10000, 32>>> (gpu_copy);
+		}
 		else
+		{
 			Mat_BinMul_OutBin <<<10000, 32>>> (gpu_copy);
+		}
 	}
 	else
 	{
 		if(!this->binarize_output)
+		{
 			Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
+		}
 		else
-			Mat_BinMul_T_OutBin <<<10000, 32>>> (gpu_copy);
+		{
+			// Mat_BinMul_T_OutBin <<<10000, 32>>> (gpu_copy);
+			std::cout << "Binarized transposed output still not supported! Exiting...";
+			exit(1);
+		}
 	}
 	cudaEventRecord(end_mult);
 	cudaEventSynchronize(end_mult);

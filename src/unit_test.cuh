@@ -780,7 +780,6 @@ int test_bin_multi_bin_out()
 
 	//=============== Set up layer =================
 
-
 	// 1 - Instantiate the binary multiplication layer.
 	std::cout << "Initializing the FC layer (with binary multiplication and FP output)..." << std::endl;
 	BinaryMultiplicationLayer bm_l1("mb_1",
@@ -792,6 +791,8 @@ int test_bin_multi_bin_out()
 									binarize_output, // Flag indicating whether the output produced by the layer must be binarized or not.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
+
+
 
 	//=============== Kernel execution =================
 
@@ -810,15 +811,17 @@ int test_bin_multi_bin_out()
 	cudaEventRecord(end_load);
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
+	std::cout << "Executing the layer..." << std::endl;
 	bm_l1.execute();
 	cudaEventRecord(end_mult);
 
-	// 5 - Retrieve the GPU output.
+	// 4 - Retrieve the GPU output.
 	std::cout << "Size output: " << bm_l1.output_bit_bytes() << " bytes" << std::endl;
 	unsigned* test_output = new unsigned[bm_l1.output_bit_bytes()];
 	bm_l1.download_output_gpu(test_output);
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
+	cudaDeviceSynchronize();
 
 
 	// 6 - Compute the execution time of the various steps.
