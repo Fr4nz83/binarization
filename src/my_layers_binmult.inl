@@ -731,26 +731,29 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
         // Write out the binarized output block that has been assigned to this warp.
         unsigned* output_sub = &(p->output_bin_gpu[by*(gdx*32) + bx*32]);
         unsigned val = 0;
-        for(uint32_t row = start_row; row < end_row; row++)
+        for(uint32_t row = start_row; row < start_row + 32; row++)
         {
+
+        	// NOTE: The -1 corresponds to padding possibly required for out-of-bound elements.
+        	// NOTE: The checks in the if allow to pad the out-of-bound elements by letting "res" set to -1.
             float res = -1.;
-        	if(start_column + laneid < end_column)
-        	{
-        		// DEBUG.
-        		// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
-        		//		laneid, (float)Cm[row - start_row],
-        		//		row, start_row, end_row, p->weights_width, row - start_row);
+			if((start_column + laneid < end_column) && (row < end_row))
+			{
+				// DEBUG.
+				// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
+				//		laneid, (float)Cm[row - start_row],
+				//		row, start_row, end_row, p->weights_width, row - start_row);
 
 
-        		// Read the final result of the binary multiplication.
-        		res = (float)Cm[row - start_row];
+				// Read the final result of the binary multiplication.
+				res = (float)Cm[row - start_row];
 
-        		// Apply the bias.
-        		res += bias;
+				// Apply the bias.
+				res += bias;
 
-        		// Apply the GELU.
-        		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
-        	}
+				// Apply the GELU.
+				res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
+			}
 
         	// Collectively binarize the row currently considered...
         	unsigned res_row_bin = __brev(__ballot_sync(0xFFFFFFFF, res >= 0));
@@ -837,14 +840,16 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
         float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
 
 
-        unsigned* output_sub = &(p->output_bin_gpu[bx*(gdy*32) + by*32]); // Compute the output address for the sub-column to write.
+        unsigned* output_sub = &(p->output_bin_gpu[bx*(gdy*32) + by*32]); // Compute the output address of the binarized sub-column to write.
         unsigned val = 0;
-        for(uint32_t column = start_column; column < end_column; column++)
+        for(uint32_t column = start_column; column < start_column + 32; column++)
         {
             float bias_col = __shfl_sync(0xFFFFFFFF, bias, column - start_column); // Here each thread retrieves the bias to apply to this column
             																	   // from the thread in the warp that has read it before.
 
-            if(start_row + laneid < end_row)
+            // NOTE: "res" is set to -1 in case of padding required for out-of-bounds elements.
+            float res = -1.;
+            if((start_row + laneid < end_row) && (column < end_column))
         	{
         		// DEBUG.
         		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
@@ -857,18 +862,18 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
 
 
         		// Read the final result of the binary multiplication.
-        		float res = (float)Cm[column - start_column];
+        		res = (float)Cm[column - start_column];
 
         		// Apply the bias associated with the currently considered column.
         		res += bias_col;
 
         		// Apply the GELU.
         		res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
-
-        		// Binarize the result and store it in "val" (i.e., each thread is binarizing its row).
-        		// Each thread must also ensure that the LSB becomes the MSB in the process (this explains the left shift).
-        		val = (val << 1) | (res >= 0);
         	}
+
+			// Binarize the result and store it in "val" (i.e., each thread is binarizing its row).
+			// Each thread must also ensure that the LSB becomes the MSB in the process (this explains the left shift).
+			val = (val << 1) | (res >= 0);
         }
 
         // Now, each thread writes out the rows of 32 values it had in charge in binarized format,

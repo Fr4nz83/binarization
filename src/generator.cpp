@@ -5,6 +5,15 @@
 #include <math.h>
 
 
+
+//================ Macro Definition ===============
+#define BITWIDTH 32
+#define LOG_BITWIDTH 5
+#define CEIL(X) (((X) + BITWIDTH - 1) >> LOG_BITWIDTH) // Equivalente a ceil(X/32)
+#define FEIL(X) ((((X) + BITWIDTH - 1) >> LOG_BITWIDTH) << LOG_BITWIDTH) // Equivalente a ceil(X/32)*32 (ovvero, il multiplo di 32 >= X)
+
+
+
 std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
 {
 	std::random_device rd;  //Will be used to obtain a seed for the random number engine
@@ -121,6 +130,19 @@ void print_array(const float* arr, const uint32_t& rows, const uint32_t& cols)
 			std::cout << arr[row * cols + col] << " ";
 		}
 		std::cout << std::endl;
+	}
+}
+
+void print_binarized_array(const unsigned* arr, const uint32_t& rows, const uint32_t& cols)
+{
+	const uint32_t num_blocks = FEIL(rows) * CEIL(cols);
+
+	for(uint32_t row = 0; row < rows; row++)
+	{
+		for(uint32_t col = 0; col < cols; col++)
+		{
+
+		}
 	}
 }
 

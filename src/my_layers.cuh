@@ -59,17 +59,18 @@ public:
 
 	BatchNormFullPrecLayer* ready();
 
+	inline int get_size_batch() {return this->size_batch;}
 	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
 	inline int get_input_channels() {return this->input_channels;}
+
+	inline int output_size() {return this->input_size();}
+	inline int output_bytes() {return this->input_bytes();}
 	inline int get_output_width() {return this->input_width;}
 	inline int get_output_height() {return this->input_height;}
 	inline int get_output_channels() {return this->input_channels;}
-	inline int get_size_batch() {return this->size_batch;}
 
 	inline void allocate_output_gpu() {};
 	inline void load_input_gpu(float* input, unsigned size_batch);
@@ -237,7 +238,7 @@ public:
 	// I/O charachteristics.
 	inline int input_size() {return this->input_channels*this->input_height*this->input_width*this->size_batch;}
 	inline int input_bytes() {return input_size() * sizeof(float);}
-	inline int get_input_batch() {return this->size_batch;}
+	inline int get_input_size_batch() {return this->size_batch;}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
 	inline int get_input_channels() {return this->input_channels;}
@@ -334,7 +335,10 @@ public:
     int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
-	inline unsigned* get_ptr_input_bin_gpu() {auto tmp = this->input_bin_gpu; this->input_bin_gpu = NULL; return tmp;} // Used only for debugging purposes.
+
+	// The function below returns the pointer to the binarized input.
+	// NOTE: used only for debugging purposes.
+	inline unsigned* get_ptr_input_bin_gpu() {auto tmp = this->input_bin_gpu; this->input_bin_gpu = NULL; return tmp;}
 
 	inline int output_size() {return this->input_height * this->weights_width;}
 	inline int output_bytes() {return this->output_size() * sizeof(float);}
@@ -357,6 +361,8 @@ public:
 
 	inline void* get_output_gpu()
 	{
+		// NOTE: the set of assignments below transfer the responsibility of the management of
+		// the GPU output pointer to the caller (hence the NULL).
 		void* tmp = !this->binarize_output ? (void*)this->output_gpu : (void*)this->output_bin_gpu;
 		if(this->binarize_output == false) this->output_gpu = NULL;
 		else this->output_bin_gpu = NULL;
