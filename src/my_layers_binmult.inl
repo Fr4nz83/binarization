@@ -296,26 +296,16 @@ void BinaryMultiplicationLayer::execute()
 	if(!this->transpose_output)
 	{
 		if(!this->binarize_output)
-		{
 			Mat_BinMul <<<10000, 32>>> (gpu_copy);
-		}
 		else
-		{
 			Mat_BinMul_OutBin <<<10000, 32>>> (gpu_copy);
-		}
 	}
 	else
 	{
 		if(!this->binarize_output)
-		{
 			Mat_BinMul_T <<<10000, 32>>> (gpu_copy);
-		}
 		else
-		{
-			// Mat_BinMul_T_OutBin <<<10000, 32>>> (gpu_copy);
-			std::cout << "Binarized transposed output still not supported! Exiting...";
-			exit(1);
-		}
+			Mat_BinMul_T_OutBin <<<10000, 32>>> (gpu_copy);
 	}
 	cudaEventRecord(end_mult);
 	cudaEventSynchronize(end_mult);
@@ -706,26 +696,26 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
             unsigned r1 = weight_sub[i*32*gdy + laneid];
 
             #pragma unroll
-            for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
+            for (int j = 0; j < WARP_SIZE; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
             {
             	// Original version: every thread has in charge a bit-row of the input matrix...
             	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
             	//		 This, of course, may be useful if one wants to get the output transposed for free.
-                // unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
-                // Cm[j] += __popc(r0 ^ r2);
+                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+                Cm[j] += __popc(r0 ^ r2);
 
 
             	// Alternative approach: every thread has in charge a bit-column of the weight matrix...
                 // This allows to write the output matrix in row-major format using coalescing.
-            	unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
-				Cm[j] += __popc(r1 ^ r2);
+            	// unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
+				// Cm[j] += __popc(r1 ^ r2);
             }
         }
 
 
         // Compute the final results of the binary multiplication by applying the formula for -1/1 on the "popc(xor)" results that have been accumulated.
 		#pragma unroll
-        for(uint8_t i = 0; i < 32; i++)
+        for(uint8_t i = 0; i < WARP_SIZE; i++)
         	Cm[i] = (int)p->input_width - 2 * Cm[i];
 
 
@@ -745,13 +735,17 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
         // Write out the binarized output block that has been assigned to this warp.
         unsigned* output_sub = &(p->output_bin_gpu[by*(gdx*32) + bx*32]);
         unsigned val = 0;
-        for(uint32_t row = start_row; row < start_row + 32; row++)
-        {
+        const uint32_t row = start_row + laneid;
 
-        	// NOTE: The -1 corresponds to padding possibly required for out-of-bound elements.
-        	// NOTE: The checks in the if allow to pad the out-of-bound elements by letting "res" set to -1.
-            float res = -1.;
-			if((start_column + laneid < end_column) && (row < end_row))
+		// NOTE: The -1 corresponds to padding possibly required for out-of-bound elements.
+		// NOTE: The checks in the if allow to pad the out-of-bound elements by letting "res" set to -1.
+		#pragma unroll
+		for(uint32_t col = start_column; col < start_column + WARP_SIZE; col++)
+		{
+			float res = -1.;
+			float bias_col = __shfl_sync(0xFFFFFFFF, bias, col - start_column); // Here each thread retrieves the bias to apply to this column
+			            													    // from the thread in the warp that has read it before.
+			if((row < end_row) && (col < end_column))
 			{
 				// DEBUG.
 				// printf("thread %d is writing value %f! R:%d SR:%d ER:%d WW:%d DIFF:%d\n",
@@ -760,19 +754,17 @@ __global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p)
 
 
 				// Read the final result of the binary multiplication.
-				res = (float)Cm[row - start_row];
+				res = (float)Cm[col - start_column];
 
 				// Apply the bias.
-				res += bias;
+				res += bias_col;
 
 				// Apply the GELU.
 				res = p->apply_gelu ? (0.5 * res) * (1 + tanhf( sqrtf(2/CUDART_PI_F) * (res + 0.044715 * powf(res, 3)) )) : res;
 			}
 
-        	// Collectively binarize the row currently considered...
-        	unsigned res_row_bin = __brev(__ballot_sync(0xFFFFFFFF, res >= 0));
-        	if(laneid == (row - start_row)) val = res_row_bin;
-        }
+			val = (val << 1) | (res >= 0);
+		}
 
     	// Write out the block of 32 32-bit-rows binarized by this warp (we use coalescing!).
 		output_sub[laneid] = val;
@@ -828,10 +820,16 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
             for (int j=0; j<32; j++) // Data una bit-row della matrice di input, qui cicliamo sulle bit-columns della matrice dei pesi.
             {
             	// Original version: every thread has in charge a bit-row of the input matrix...
-            	// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
-            	//		 This, of course, may be useful if one wants to get the output transposed for free.
-                unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
-                Cm[j] += __popc(r0 ^ r2);
+				// NOTE: this forces to write the full-precision output in column-major format if one wants to use coalescing.
+				//		 This, of course, may be useful if one wants to get the output transposed for free.
+				// unsigned r2 = __shfl_sync(0xFFFFFFFF, r1, j); // from lane-j, r1 of weight matrix
+				// Cm[j] += __popc(r0 ^ r2);
+
+
+				// Alternative approach: every thread has in charge a bit-column of the weight matrix...
+				// This allows to write the output matrix in row-major format using coalescing.
+				unsigned r2 = __shfl_sync(0xFFFFFFFF, r0, j); // from lane-j, r0 of input matrix
+				Cm[j] += __popc(r1 ^ r2);
             }
         }
 
@@ -849,21 +847,23 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
         const uint32_t start_column = by * 32;
         const uint32_t end_column = min(start_column + 32, p->weights_width);
 
-        // Read the biases associated to the interval of the columns of the weight matrix involved
-        // by the output block presently considered by this warp. Uses coalescing.
-        float bias = (start_column + laneid < end_column) ? p->bias_gpu[start_column + laneid] : 0;
 
 
         unsigned* output_sub = &(p->output_bin_gpu[bx*(gdy*32) + by*32]); // Compute the output address of the binarized sub-column to write.
         unsigned val = 0;
-        for(uint32_t column = start_column; column < start_column + 32; column++)
+        const uint32_t column = start_column + laneid;
+
+        // Read the biases associated to the interval of the columns of the weight matrix involved
+		// by the output block presently considered by this warp. Uses coalescing.
+        float bias_col = (column < end_column) ? p->bias_gpu[column] : 0;
+
+		#pragma unroll
+        for(uint32_t row = start_row; row < start_row + 32; row++)
         {
-            float bias_col = __shfl_sync(0xFFFFFFFF, bias, column - start_column); // Here each thread retrieves the bias to apply to this column
-            																	   // from the thread in the warp that has read it before.
 
             // NOTE: "res" is set to -1 in case of padding required for out-of-bounds elements.
             float res = -1.;
-            if((start_row + laneid < end_row) && (column < end_column))
+            if((row < end_row) && (column < end_column))
         	{
         		// DEBUG.
         		/*printf("thread %d is writing value %f! R:%d SR:%d ER:%d C:%d SC:%d EC:%d WW:%d DIFFR:%d DIFFC:%d\n",
@@ -876,7 +876,7 @@ __global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p)
 
 
         		// Read the final result of the binary multiplication.
-        		res = (float)Cm[column - start_column];
+        		res = (float)Cm[row - start_row];
 
         		// Apply the bias associated with the currently considered column.
         		res += bias_col;

@@ -744,7 +744,7 @@ int test_bin_multi_bin_out()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 5000,	// # of input entries.
+	constexpr uint32_t input_height = 10000,	// # of input entries.
 					   weights_height = 1000,	// # of features
 					   weights_width = 1000;		// # Activation units
 
@@ -829,9 +829,9 @@ int test_bin_multi_bin_out()
 	cudaEventElapsedTime(&ms_load, start, end_load);
 	cudaEventElapsedTime(&ms_kernel, end_load, end_mult);
 	cudaEventElapsedTime(&ms_out, end_mult, stop);
-	std::cout << "Load time: " << ms_load << " ms." << std::endl;
+	std::cout << "Load time input CPU => GPU: " << ms_load << " ms." << std::endl;
 	std::cout << "Input binarization + binary multi execution time: " << ms_kernel << " ms." << std::endl;
-	std::cout << "Binarized output to CPU time: " << ms_out << " ms." << std::endl;
+	std::cout << "Binarized output upload from GPU to CPU time: " << ms_out << " ms." << std::endl;
 
 
 
@@ -878,11 +878,11 @@ int test_bin_multi_bin_out()
 		transform_array_ones(res_cpu, input_height * weights_width, res_cpu_trans);
 
 
-		// std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
-		// print_array(res_cpu_trans, input_height, weights_width);
+		//std::cout << "Stampa risultato moltiplicazione 1/-1 su CPU" << std::endl;
+		//print_array(res_cpu_trans, input_height, weights_width);
 
-		// std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
-		// print_binarized_array(test_output, input_height, weights_width);
+		//std::cout << "Stampa risultato moltiplicazione 1/-1 su GPU" << std::endl;
+		//print_binarized_array(test_output, input_height, weights_width);
 
 
 
