@@ -1,3 +1,9 @@
+// *** FORWARD DECLARATIONS OF CUDA KERNELS USED BY THIS CLASS *** //
+
+__global__ void BNFPLayer(BatchNormFullPrecLayer* p);
+
+
+
 // *** CTORS/DTOR DEFINITIONS *** //
 
 BatchNormFullPrecLayer::BatchNormFullPrecLayer(const char* name,
@@ -102,6 +108,17 @@ void BatchNormFullPrecLayer::load_input_gpu(float* input, unsigned size_batch)
 void BatchNormFullPrecLayer::download_output_gpu(float* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->input_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
+}
+
+void BatchNormFullPrecLayer::execute_layer()
+{
+	constexpr uint32_t WARP_SIZE = 32;
+
+	// 1 - Prepare the layer for execution.
+	BatchNormFullPrecLayer* gpu_copy = this->ready();
+
+	// 2 - Execute layer.
+	BNFPLayer <<<this->size_batch, WARP_SIZE>>> (gpu_copy);
 }
 
 

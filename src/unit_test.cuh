@@ -155,11 +155,8 @@ int test_bnfp_layer()
 	bn_l1.load_input_gpu(img_data, size_batch);
 	cudaEventRecord(end_load);
 
-	// 3 - Prepare the layer for execution.
-	BatchNormFullPrecLayer* gpu_copy = bn_l1.ready();
-
 	// 4 - Batch normalization kernel execution.
-	BNFPLayer <<<size_batch, 32>>>(gpu_copy);
+	bn_l1.execute_layer();
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 

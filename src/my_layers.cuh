@@ -78,6 +78,8 @@ public:
 
 	inline float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
 	inline void download_output_gpu(float* output);
+
+	inline void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class BatchNormFullPrecLayer.
