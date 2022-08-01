@@ -36,7 +36,9 @@ int main()
 
 	//test_bin_multi();
 	//test_bin_multi_bin_input();
-	test_bin_multi_bin_out();
+	//test_bin_multi_bin_out();
+
+	test_sum_layer();
 	std::cout << "Test units executed!" << std::endl;
 
 

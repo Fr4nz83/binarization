@@ -415,7 +415,7 @@ int test_bin_multi()
 	cudaEventRecord(end_load);
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
-	bm_l1.execute();
+	bm_l1.execute_layer();
 	cudaEventRecord(end_mult);
 
 	// 5 - Retrieve the GPU output.
@@ -606,7 +606,7 @@ int test_bin_multi_bin_input()
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	std::cout << "Binarizing the input matrix..." << std::endl;
 	bm_l1.load_input_gpu(img_data, input_height);
-	bm_l1.execute();
+	bm_l1.execute_layer();
 
 
 	// 3 - Here we instantiate the binary multiplication layer which actually takes in input a binarized input array.
@@ -623,7 +623,7 @@ int test_bin_multi_bin_input()
 
 	// 4 - Here we get the binarized input matrix from the first layer, and then execute the second layer.
 	bm_l2.set_input_gpu(bm_l1.get_ptr_input_bin_gpu(), input_height);
-	bm_l2.execute();
+	bm_l2.execute_layer();
 
 
 	// 5 - Retrieve the GPU output from the second layer.
@@ -814,7 +814,7 @@ int test_bin_multi_bin_out()
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
 	std::cout << "Executing the layer..." << std::endl;
-	bm_l1.execute();
+	bm_l1.execute_layer();
 	cudaEventRecord(end_mult);
 
 	// 4 - Retrieve the GPU output.
@@ -940,6 +940,108 @@ int test_bin_multi_bin_out()
 	cudaEventDestroy(start);
 	cudaEventDestroy(end_load);
 	cudaEventDestroy(end_mult);
+	cudaEventDestroy(stop);
+
+
+	return 0;
+}
+
+
+
+int test_sum_layer()
+{
+	std::cout << "*** FP matrix sum layer unit test *** " << std::endl;
+
+
+
+    //=============== Device Configuration =================
+	int dev = 0;
+	cudaSetDevice(dev);
+
+
+
+	//=============== Generate matrices =================
+
+	constexpr uint32_t image_height = 1024 * 17,
+			  	  	   image_width = 1024 * 17;
+
+	auto mat1 = gen_matrix(image_height, image_width);
+	auto mat2 = gen_matrix(image_height, image_width);
+	std::cout << "Size input: " << mat1.size() * sizeof(float) * 2 << " bytes" << std::endl;
+	std::cout << "Size output: " << mat1.size() * sizeof(float) << " bytes" << std::endl;
+	std::cout << "Total memory to be allocated on GPU: " << mat1.size() * sizeof(float) * 3 << " bytes" << std::endl;
+
+	float* img1_data = mat1.data();
+	float* img2_data = mat2.data();
+
+
+
+	//=============== Set up sum layer =================
+
+	MatrixSumLayer sum_l1("sum_fp1",
+						  image_width,     // Input width
+						  image_height);   // Input height
+
+
+
+	//=============== Layer execution =================
+
+	// CUDA variables needed to measure the time the various operations take.
+	cudaEvent_t start, end_load, stop;
+	cudaEventCreate(&start); cudaEventCreate(&end_load), cudaEventCreate(&stop);
+
+
+	// 1 - Load input data from CPU to GPU and allocate space for the output.
+	cudaEventRecord(start);
+	sum_l1.load_input_gpu(img1_data, img2_data);
+	cudaEventRecord(end_load);
+
+
+	// 2 - Prepare the layer for its execution
+	MatrixSumLayer* gpu_copy = sum_l1.ready();
+
+
+	// 3 - Matrix sum kernel execution.
+	// NOTE: we allocate 32 threads (1 warp) per block.
+	sum_l1.execute_layer();
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+
+	// 4 - Copy output from GPU to CPU.
+	float *test_output = new float[sum_l1.output_size()];
+	sum_l1.download_output_gpu(test_output);
+
+
+	// 5 - Compute the execution time of the various steps.
+	float ms_load, ms_kernel;
+	cudaEventElapsedTime(&ms_load, start, end_load);
+	cudaEventElapsedTime(&ms_kernel, end_load, stop);
+	std::cout << "Load time: " << ms_load << " ms." << std::endl;
+	std::cout << "Kernel execution time: " << ms_kernel << " ms." << std::endl;
+
+
+
+	// Verify the GPU output correctness.
+	constexpr float eps = 1e-5;
+	const uint32_t size_matrix = sum_l1.output_size();
+	bool check = true;
+	for(uint32_t n = 0; (n < size_matrix) && check; n++)
+	{
+		const float res = mat1[n] + mat2[n];
+
+		// DEBUG.
+		// std::cout << "Correct value: " << res << " - GPU value: " << test_output[n] << std::endl;
+
+		if(std::abs(res - test_output[n]) > eps)
+			check = false;
+	}
+	std::cout << "Check output GPU correctness: " << (check ? "OK" : "KO") << std::endl;
+
+
+	delete[] test_output;
+	cudaEventDestroy(start);
+	cudaEventDestroy(end_load);
 	cudaEventDestroy(stop);
 
 

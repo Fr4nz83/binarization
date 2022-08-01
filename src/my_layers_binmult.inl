@@ -269,7 +269,7 @@ void BinaryMultiplicationLayer::download_output_gpu(void* output)
 	}
 }
 
-void BinaryMultiplicationLayer::execute()
+void BinaryMultiplicationLayer::execute_layer()
 {
 	cudaEvent_t start_bin, end_bin, end_mult;
 	cudaEventCreate(&start_bin);

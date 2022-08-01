@@ -370,8 +370,68 @@ public:
 	}
 	inline void download_output_gpu(void* output);
 
-	inline void execute();
+	inline void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.
 #include "my_layers_binmult.inl"
+
+
+
+class MatrixSumLayer
+{
+public:
+
+	// *** FIELDS *** //
+
+	float* input1_gpu;
+	float* input2_gpu;
+	float* output_gpu;
+
+	unsigned input_width;
+	unsigned input_height;
+
+	// GPU shadow.
+	MatrixSumLayer* gpu;
+
+	char name[8];
+
+
+
+	// *** CTORS/DTOR *** //
+
+	MatrixSumLayer(const char* name,
+			  const unsigned& data_width,
+			  const unsigned& data_height);
+	~MatrixSumLayer(){this->release();};
+
+
+
+	// *** METHODS *** //
+
+	inline void release();
+
+	MatrixSumLayer* ready();
+
+	inline int input_size() {return this->input_height * this->input_width;}
+	inline int input_bytes() {return this->input_size() * sizeof(float);}
+	inline int get_input_width() {return this->input_width;}
+	inline int get_input_heigth() {return this->input_height;}
+
+	inline int output_size() {return this->input_size();}
+	inline int output_bytes() {return this->input_bytes();}
+	inline int get_output_width() {return this->get_input_width();}
+	inline int get_output_height() {return this->get_input_heigth();}
+
+	inline void allocate_output_gpu();
+	inline void load_input_gpu(float* input1, float* input2);
+	inline void set_input_gpu(float* input1_gpu, float* input2_gpu) {this->input1_gpu = input1_gpu; this->input2_gpu = input2_gpu;}
+
+	inline float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline void download_output_gpu(float* output);
+
+	inline void execute_layer();
+};
+
+// Pull in the definitions of the methods associated with the class ConvLayer.
+#include "my_layers_matrix_sum.inl"
