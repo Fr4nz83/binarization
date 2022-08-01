@@ -265,7 +265,7 @@ public:
 	inline float* get_residual_gpu(){auto tmp = this->save_residual_gpu; this->save_residual_gpu = NULL; return tmp;}
 	void download_residual_gpu(float* residual);
 
-	bool execute_layer();
+	inline void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.
@@ -403,8 +403,8 @@ public:
 	// *** CTORS/DTOR *** //
 
 	MatrixSumLayer(const char* name,
-			  const unsigned& data_width,
-			  const unsigned& data_height);
+			  	   const unsigned& data_width,
+				   const unsigned& data_height);
 	~MatrixSumLayer(){this->release();};
 
 

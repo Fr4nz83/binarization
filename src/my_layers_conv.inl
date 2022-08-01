@@ -291,8 +291,12 @@ bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
 	std::cout << this->name << " => cuDNN input tensor descriptor allocation OK!" << std::endl;
 
 
+	// Allocate space for the output.
+	bool check = this->allocate_output_gpu();
+
+
 	// Sanity check on various pointers and data structures to ensure that the layer is ready to be executed.
-	return true;
+	return check;
 }
 
 bool ConvLayer::set_input_gpu(float* input_gpu, const unsigned& batch_size)
@@ -341,10 +345,10 @@ bool ConvLayer::allocate_output_gpu()
 		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->save_residual_gpu), this->output_bytes()));
 
 
-	// *** ALLOCATE cuDNN INPUT AND OUTPUT TENSORS *** //
+
+	// *** ALLOCATE cuDNN OUTPUT TENSORS *** //
 
 	cudnnStatus_t status;
-
 
 	// Reset the state of the input and output tensors descriptors.
 	if(this->output_descriptor != NULL) cudnnDestroyTensorDescriptor(this->output_descriptor);
@@ -365,7 +369,7 @@ bool ConvLayer::allocate_output_gpu()
 	return true;
 }
 
-bool ConvLayer::execute_layer()
+void ConvLayer::execute_layer()
 {
 	cudnnStatus_t status;
 	constexpr float alpha = 1, beta = 0;
@@ -384,14 +388,15 @@ bool ConvLayer::execute_layer()
 									 &beta,
 									 this->output_descriptor,
 									 this->output_gpu);
-	if (status != CUDNN_STATUS_SUCCESS) return false;
+	if (status != CUDNN_STATUS_SUCCESS)
+	{
+		std::cout << this->name << " => cuDNN convolution computation KO! ERROR!!" << std::endl;
+		exit(1);
+	}
 	std::cout << this->name << " => cuDNN convolution computation OK!" << std::endl;
 
 
 	// If we have skip connections, save the output in the appropriate buffer for residuals.
 	if(this->save_residual)
 		CUDA_SAFE_CALL(cudaMemcpy(this->save_residual_gpu, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToDevice));
-
-
-	return true;
 }
