@@ -1,3 +1,9 @@
+// *** FORWARD DECLARATIONS OF CUDA KERNELS USED BY THIS CLASS *** //
+
+__global__ void TransposeFPLayer(TransposeFullPrecLayer* p);
+
+
+
 // *** CTORS/DTOR DEFINITIONS *** //
 
 TransposeFullPrecLayer::TransposeFullPrecLayer(const char* name,
@@ -86,6 +92,17 @@ void TransposeFullPrecLayer::download_output_gpu(float* output)
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->input_bytes(), cudaMemcpyDeviceToHost));
 }
 
+void TransposeFullPrecLayer::execute_layer()
+{
+	constexpr uint32_t THREADS_PER_BLOCK = 32;
+
+	// 1 - Prepare the layer for execution.
+	TransposeFullPrecLayer* gpu_copy = this->ready();
+
+	// 2 - Execute the layer.
+	TransposeFPLayer <<<this->size_batch, THREADS_PER_BLOCK>>> (gpu_copy);
+}
+
 
 
 // *** CUDA KERNELS *** //
@@ -95,7 +112,6 @@ void TransposeFullPrecLayer::download_output_gpu(float* output)
  *
  * @note The kernel assumes that the dataset is stored in NCHW format.
  */
-// TODO: this kernel will have to be a __device__ function at some point.
 __global__ void TransposeFPLayer(TransposeFullPrecLayer* p)
 {
 	// General properties for this kernel.

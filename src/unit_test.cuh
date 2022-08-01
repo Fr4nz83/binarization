@@ -233,8 +233,7 @@ int test_transpose_layer()
 	constexpr uint32_t size_batch = 4000,
 					   image_height = 32,
 			  	  	   image_width = 32,
-					   image_channels = 10,
-					   THREADS_PER_BLOCK = 32;
+					   image_channels = 10;
 	auto tmp = gen_matrix(size_batch * image_channels, image_height, image_width);
 	float* img_data = tmp.data();
 	std::cout << "Size input: " << tmp.size() * sizeof(float) << " bytes" << std::endl;
@@ -268,8 +267,7 @@ int test_transpose_layer()
 
 
 	// 4 - Transpose kernel execution.
-	// NOTE: we allocate 32 threads (1 warp) per block.
-	TransposeFPLayer <<<size_batch, THREADS_PER_BLOCK>>> (gpu_copy);
+	tr_l1.execute_layer();
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 
@@ -995,10 +993,6 @@ int test_sum_layer()
 	cudaEventRecord(start);
 	sum_l1.load_input_gpu(img1_data, img2_data);
 	cudaEventRecord(end_load);
-
-
-	// 2 - Prepare the layer for its execution
-	MatrixSumLayer* gpu_copy = sum_l1.ready();
 
 
 	// 3 - Matrix sum kernel execution.
