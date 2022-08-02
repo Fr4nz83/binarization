@@ -23,6 +23,7 @@ class BatchNormFullPrecLayer
 public:
 
 	// *** FIELDS *** //
+
 	unsigned size_batch;
 
 	float* input_gpu;
