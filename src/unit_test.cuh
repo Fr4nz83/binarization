@@ -958,8 +958,8 @@ int test_sum_layer()
 
 	//=============== Generate matrices =================
 
-	constexpr uint32_t image_height = 1024 * 17,
-			  	  	   image_width = 1024 * 17;
+	constexpr uint32_t image_height = 1024 * 10,
+			  	  	   image_width = 1024 * 10;
 
 	auto mat1 = gen_matrix(image_height, image_width);
 	auto mat2 = gen_matrix(image_height, image_width);

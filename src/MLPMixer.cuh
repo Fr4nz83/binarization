@@ -29,6 +29,7 @@ public:
 	// Output fields.
 	float* output_gpu;			// Memory allocated for FP output.
 
+
 	// Residuals that at some points are used within the MLP-Mixer block.
 	float* gpu_residuals_1;
 	float* gpu_residuals_2;
@@ -38,12 +39,13 @@ public:
 	BatchNormFullPrecLayer* bn1_layer;
 	BinaryMultiplicationLayer* bmm1_layer; // Must binarize a FP input and produce a binarized output.
 	BinaryMultiplicationLayer* bmm2_layer; // Takes an already binarized input and must produce a transposed FP output.
-	BatchNormFullPrecLayer* bn2_layer;
-	BinaryMultiplicationLayer* bmm3_layer;
-	BinaryMultiplicationLayer* bmm4_layer;
 
-	TransposeFullPrecLayer* tr_layer;
-	MatrixSumLayer* sum_layer;
+	BatchNormFullPrecLayer* bn2_layer;
+	BinaryMultiplicationLayer* bmm3_layer; // Must binarize a FP input and produce a binarized output.
+	BinaryMultiplicationLayer* bmm4_layer; // Takes an already binarized input and must produce a transposed FP output.
+
+	TransposeFullPrecLayer* tr_layer; // NOTE: This layer is potentially used twice in the MLP-Mixer block.
+	MatrixSumLayer* sum_layer; // NOTE: This layer is potentially used twice in the MLP-Mixer block.
 
 
 
@@ -51,8 +53,8 @@ public:
 
 	MLPMixer(const char* name,
 			 BatchNormFullPrecLayer* bn1_layer,
-	         BinaryMultiplicationLayer* bmm1_layer, // Must binarize a FP input and produce a binarized output.
-	         BinaryMultiplicationLayer* bmm2_layer, // Takes an already binarized input and must produce a transposed FP output.
+	         BinaryMultiplicationLayer* bmm1_layer,
+	         BinaryMultiplicationLayer* bmm2_layer,
 	         BatchNormFullPrecLayer* bn2_layer,
 	         BinaryMultiplicationLayer* bmm3_layer,
 	         BinaryMultiplicationLayer* bmm4_layer);

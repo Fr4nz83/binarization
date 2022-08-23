@@ -13,12 +13,54 @@
 #include "cuda_utilities.cuh"
 
 
+/**
+ * @brief This class provides the interface that all the layers must implement.
+ */
+class Layer
+{
+public:
+
+	// *** CTORS / DTOR *** //
+
+	virtual ~Layer() {};
+
+
+
+	// *** PUBLIC METHODS *** //
+
+	virtual void release() = 0;
+	virtual Layer* ready() = 0;
+
+	virtual int get_size_batch() = 0;
+
+	virtual int input_size() = 0;
+	virtual int input_bytes() = 0;
+	virtual int get_input_width() = 0;
+	virtual int get_input_heigth() = 0;
+	virtual int get_input_channels() = 0;
+
+	virtual int output_size() = 0;
+	virtual int output_bytes() = 0;
+	virtual int get_output_width() = 0;
+	virtual int get_output_height() = 0;
+	virtual int get_output_channels() = 0;
+
+	virtual void allocate_output_gpu() = 0;
+	// virtual void load_input_gpu(float* input, unsigned size_batch) = 0;
+	// virtual void set_input_gpu(float* input_gpu, unsigned size_batch) = 0;
+
+	virtual float* get_output_gpu() = 0;
+	virtual void download_output_gpu(float* output) = 0;
+
+	virtual void execute_layer() = 0;
+};
+
 
 /** @brief This class implements a batch normalization layer which can operate on different channels.
  *
  *  @note The implementation assumes that a dataset of images follows the NCHW format.
  */
-class BatchNormFullPrecLayer
+class BatchNormFullPrecLayer : public Layer
 {
 public:
 
@@ -50,37 +92,37 @@ public:
 						   const unsigned& in_channels,
 						   const float* scale,
 						   const float* shift);
-	~BatchNormFullPrecLayer(){this->release();};
+	virtual ~BatchNormFullPrecLayer() {this->release();};
 
 
 
 	// *** METHODS *** //
 
-	void release();
+	inline virtual void release();
+	inline virtual BatchNormFullPrecLayer* ready();
 
-	BatchNormFullPrecLayer* ready();
+	inline virtual int get_size_batch() {return this->size_batch;}
 
-	inline int get_size_batch() {return this->size_batch;}
-	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
-	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int get_input_width() {return this->input_width;}
-	inline int get_input_heigth() {return this->input_height;}
-	inline int get_input_channels() {return this->input_channels;}
+	inline virtual int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return this->input_channels;}
 
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
-	inline int get_output_width() {return this->input_width;}
-	inline int get_output_height() {return this->input_height;}
-	inline int get_output_channels() {return this->input_channels;}
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->input_width;}
+	inline virtual int get_output_height() {return this->input_height;}
+	inline virtual int get_output_channels() {return this->input_channels;}
 
-	inline void allocate_output_gpu() {};
+	inline virtual void allocate_output_gpu() {};
 	inline void load_input_gpu(float* input, unsigned size_batch);
 	inline void set_input_gpu(float* input_gpu, unsigned size_batch) { this->input_gpu = input_gpu; this->size_batch = size_batch;}
 
-	inline float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
-	inline void download_output_gpu(float* output);
+	inline virtual float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(float* output);
 
-	inline void execute_layer();
+	inline virtual void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class BatchNormFullPrecLayer.
@@ -88,11 +130,12 @@ public:
 
 
 
-class TransposeFullPrecLayer
+class TransposeFullPrecLayer : public Layer
 {
 public:
 
 	// *** FIELDS *** //
+
 	unsigned size_batch;
 
 	float* input_gpu;
@@ -115,37 +158,37 @@ public:
 						   const unsigned& data_width,
 						   const unsigned& data_height,
 						   const unsigned& data_channels);
-	~TransposeFullPrecLayer(){this->release();};
+	virtual ~TransposeFullPrecLayer(){this->release();};
 
 
 
 	// *** METHODS *** //
 
-	inline void release();
+	inline virtual void release();
+	virtual TransposeFullPrecLayer* ready();
 
-	TransposeFullPrecLayer* ready();
+	inline virtual int get_size_batch() {return this->size_batch;}
 
-	inline int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
-	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int get_input_width() {return this->input_width;}
-	inline int get_input_heigth() {return this->input_height;}
-	inline int get_input_channels() {return this->input_channels;}
+	inline virtual int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return this->input_channels;}
 
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
-	inline int get_output_width() {return this->input_height;}
-	inline int get_output_height() {return this->input_width;}
-	inline int get_output_channels() {return this->input_channels;}
-	inline int get_size_batch() {return this->size_batch;}
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->input_height;}
+	inline virtual int get_output_height() {return this->input_width;}
+	inline virtual int get_output_channels() {return this->input_channels;}
 
-	inline void allocate_output_gpu();
+	inline virtual void allocate_output_gpu();
 	inline void load_input_gpu(float* input, unsigned size_batch);
 	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
 
-	inline float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
-	inline void download_output_gpu(float* output);
+	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(float* output);
 
-	inline void execute_layer();
+	inline virtual void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.
@@ -330,9 +373,9 @@ public:
 	// *** METHODS *** //
 
 	inline void release();
+	BinaryMultiplicationLayer* ready();
 
 	inline void init_bin_weights(const float* weights, const float* bias);
-	BinaryMultiplicationLayer* ready();
 
 	inline int input_size() {return this->input_height * this->input_width;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
@@ -383,7 +426,7 @@ public:
 
 
 
-class MatrixSumLayer
+class MatrixSumLayer : public Layer
 {
 public:
 
@@ -408,34 +451,37 @@ public:
 	MatrixSumLayer(const char* name,
 			  	   const unsigned& data_width,
 				   const unsigned& data_height);
-	~MatrixSumLayer(){this->release();};
+	virtual ~MatrixSumLayer(){this->release();};
 
 
 
 	// *** METHODS *** //
 
-	inline void release();
+	inline virtual void release();
+	virtual MatrixSumLayer* ready();
 
-	MatrixSumLayer* ready();
+	inline virtual int get_size_batch() {return 1;}
 
-	inline int input_size() {return this->input_height * this->input_width;}
-	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int get_input_width() {return this->input_width;}
-	inline int get_input_heigth() {return this->input_height;}
+	inline virtual int input_size() {return this->input_height * this->input_width;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return 1;}
 
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
-	inline int get_output_width() {return this->get_input_width();}
-	inline int get_output_height() {return this->get_input_heigth();}
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->get_input_width();}
+	inline virtual int get_output_height() {return this->get_input_heigth();}
+	inline virtual int get_output_channels() {return 1;}
 
-	inline void allocate_output_gpu();
+	inline virtual void allocate_output_gpu();
 	inline void load_input_gpu(float* input1, float* input2);
 	inline void set_input_gpu(float* input1_gpu, float* input2_gpu) {this->input1_gpu = input1_gpu; this->input2_gpu = input2_gpu;}
 
-	inline float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
-	inline void download_output_gpu(float* output);
+	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(float* output);
 
-	inline void execute_layer();
+	inline virtual void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.
