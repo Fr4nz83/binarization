@@ -153,7 +153,7 @@ int test_bnfp_layer()
 
 	// 2 - Copy data from CPU to GPU.
 	cudaEventRecord(start);
-	bn_l1.load_input_gpu(img_data, size_batch);
+	bn_l1.load_input_gpu(size_batch, {img_data});
 	cudaEventRecord(end_load);
 
 	// 4 - Batch normalization kernel execution.
@@ -256,7 +256,7 @@ int test_transpose_layer()
 
 	// 1 - Load input data from CPU to GPU and allocate space for the output.
 	cudaEventRecord(start);
-	tr_l1.load_input_gpu(img_data, size_batch);
+	tr_l1.load_input_gpu(size_batch, {img_data});
 	cudaEventRecord(end_load);
 
 
@@ -989,7 +989,7 @@ int test_sum_layer()
 
 	// 1 - Load input data from CPU to GPU and allocate space for the output.
 	cudaEventRecord(start);
-	sum_l1.load_input_gpu(img1_data, img2_data);
+	sum_l1.load_input_gpu(1, {img1_data, img2_data});
 	cudaEventRecord(end_load);
 
 

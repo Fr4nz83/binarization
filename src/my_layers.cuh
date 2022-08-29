@@ -46,8 +46,8 @@ public:
 	virtual int get_output_channels() = 0;
 
 	virtual void allocate_output_gpu() = 0;
-	// virtual void load_input_gpu(float* input, unsigned size_batch) = 0;
-	// virtual void set_input_gpu(float* input_gpu, unsigned size_batch) = 0;
+	virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input) = 0;
+	virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu) = 0;
 
 	virtual float* get_output_gpu() = 0;
 	virtual void download_output_gpu(float* output) = 0;
@@ -116,8 +116,12 @@ public:
 	inline virtual int get_output_channels() {return this->input_channels;}
 
 	inline virtual void allocate_output_gpu() {};
-	inline void load_input_gpu(float* input, unsigned size_batch);
-	inline void set_input_gpu(float* input_gpu, unsigned size_batch) { this->input_gpu = input_gpu; this->size_batch = size_batch;}
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input_gpu = static_cast<float*>(input_gpu[0]);
+		this->size_batch = size_batch;
+	}
 
 	inline virtual float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
 	inline virtual void download_output_gpu(float* output);
@@ -182,8 +186,12 @@ public:
 	inline virtual int get_output_channels() {return this->input_channels;}
 
 	inline virtual void allocate_output_gpu();
-	inline void load_input_gpu(float* input, unsigned size_batch);
-	inline void set_input_gpu(float* input_gpu, unsigned size_batch) {this->input_gpu = input_gpu; this->size_batch = size_batch;}
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input_gpu = static_cast<float*>(input_gpu[0]);
+		this->size_batch = size_batch;
+	}
 
 	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
 	inline virtual void download_output_gpu(float* output);
@@ -475,8 +483,12 @@ public:
 	inline virtual int get_output_channels() {return 1;}
 
 	inline virtual void allocate_output_gpu();
-	inline void load_input_gpu(float* input1, float* input2);
-	inline void set_input_gpu(float* input1_gpu, float* input2_gpu) {this->input1_gpu = input1_gpu; this->input2_gpu = input2_gpu;}
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input1_gpu = static_cast<float*>(input_gpu[0]);
+		this->input2_gpu = static_cast<float*>(input_gpu[1]);
+	}
 
 	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
 	inline virtual void download_output_gpu(float* output);

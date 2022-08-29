@@ -95,12 +95,12 @@ BatchNormFullPrecLayer* BatchNormFullPrecLayer::ready()
 	return this->gpu;
 }
 
-void BatchNormFullPrecLayer::load_input_gpu(float* input, unsigned size_batch)
+void BatchNormFullPrecLayer::load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input)
 {
 	this->size_batch = size_batch;
 
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input, this->input_bytes(), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input[0], this->input_bytes(), cudaMemcpyHostToDevice));
 
 	this->allocate_output_gpu();
 }

@@ -85,7 +85,7 @@ void MatrixSumLayer::allocate_output_gpu()
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->output_bytes()));
 }
 
-void MatrixSumLayer::load_input_gpu(float* input1, float* input2)
+void MatrixSumLayer::load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input)
 {
 
 	if(this->input1_gpu != NULL)
@@ -95,7 +95,7 @@ void MatrixSumLayer::load_input_gpu(float* input1, float* input2)
 	}
 
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input1_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input1_gpu, input1, this->input_bytes(), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input1_gpu, input[0], this->input_bytes(), cudaMemcpyHostToDevice));
 
 	if(this->input2_gpu != NULL)
 	{
@@ -104,7 +104,7 @@ void MatrixSumLayer::load_input_gpu(float* input1, float* input2)
 	}
 
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input2_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input2_gpu, input2, this->input_bytes(), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input2_gpu, input[1], this->input_bytes(), cudaMemcpyHostToDevice));
 
 
 	this->allocate_output_gpu();

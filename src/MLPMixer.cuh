@@ -65,13 +65,15 @@ public:
 	// *** METHODS *** //
 
 	inline void release() {};
+	inline MLPMixer* ready() {return this;};
+
+	inline int get_input_size_batch() {return this->input_size_batch;}
 
 	inline int input_size() {return this->input_size_batch * this->input_height * this->input_width * this->input_channels;}
 	inline int input_bytes() {return this->input_size() * sizeof(float);}
 	inline int get_input_width() {return this->input_width;}
 	inline int get_input_heigth() {return this->input_height;}
 	inline int get_input_channels() {return this->input_channels;}
-	inline int get_input_size_batch() {return this->input_size_batch;}
 
 	inline int output_size() {return this->input_size();}
 	inline int output_bytes() {return this->input_bytes();}
@@ -82,8 +84,8 @@ public:
 
 	// TODO: da implementare.
 	inline void allocate_output_gpu() {};
-	inline void load_input_gpu(void* input, const unsigned& input_height, const unsigned& input_width, const unsigned& input_channels) {};
-	inline void set_input_gpu(void* input_gpu, const unsigned& input_height, const unsigned& input_width, const unsigned& input_channels) {};
+	inline void load_input_gpu(void* input) {};
+	inline void set_input_gpu(void* input_gpu) {};
 
 	// TODO: da implementare.
 	inline void* get_output_gpu() {return 0;};
