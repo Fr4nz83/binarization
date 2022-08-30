@@ -43,100 +43,37 @@ bool ConvLayer::initialize_cuDNN()
 }
 
 /**
- * @brief This method performs a few sanity check operations to ensure that everything is going well.
+ * @brief This method loads the filter and batch normalization (if required) data needed by the layer.
+ *
+ * @param filters Pointer to a region of memory containing the values of the filters, according to the NCHW format.
+ * @param bn Pointer to a region of memory containing the batch normalization data (one value per output channel).
  */
-bool ConvLayer::ready()
+bool ConvLayer::initialize_filters(const float* filters)
 {
-	// Pointers sanity check.
-	if (this->input_gpu == NULL || this->input_size() == 0)
-	{
-		fprintf(stderr, "Input data has not been uploaded to GPU.\n");
-		exit(1);
-	}
-	if (this->output_gpu == NULL || this->output_size() == 0)
-	{
-		fprintf(stderr, "Output on GPU has not been allocated.\n");
-		exit(1);
-	}
-	if (this->filter_gpu == NULL || this->filter_size() == 0)
-	{
-		fprintf(stderr, "Output on GPU has not been allocated.\n");
-		exit(1);
-	}
-	if (this->save_residual && this->save_residual_gpu == NULL)
-	{
-		fprintf(stderr, "Residual for saving on GPU has not been allocated.\n");
-		exit(1);
-	}
+	// Read and allocate filters data.
+	std::cout << this->name << " => Copying filter data from CPU to GPU..." << std::endl;
+	std::cout << this->name << " => Filter bytes: " << filter_bytes() << std::endl;
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->filter_gpu), filter_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(this->filter_gpu, filters, filter_bytes(), cudaMemcpyHostToDevice));
 
 
 
-	// *** Compute the workspace required by the selected cuDNN algorithm. *** //
 	cudnnStatus_t status;
-	this->workspace_bytes = 0;
-	status = cudnnGetConvolutionForwardWorkspaceSize(this->cudnn,
-													 this->input_descriptor,
-													 this->kernel_descriptor,
-													 this->convolution_descriptor,
-													 this->output_descriptor,
-													 this->convolution_algorithm,
-													 &this->workspace_bytes);
+
+	// Allocate kernel tensor data structures.
+	cudnnCreateFilterDescriptor(&this->kernel_descriptor);
+	status = cudnnSetFilter4dDescriptor(this->kernel_descriptor,
+										/*dataType=*/CUDNN_DATA_FLOAT,
+										/*format=*/CUDNN_TENSOR_NCHW,
+										/*out_channels=*/this->output_channels,
+										/*in_channels=*/this->input_channels,
+										/*kernel_height=*/this->filter_height,
+										/*kernel_width=*/this->filter_width);
 	if (status != CUDNN_STATUS_SUCCESS) return false;
-	std::cout << this->name << " => cuDNN workspace size calc OK!" << std::endl;
-	std::cout << this->name << " => Workspace size: " << this->workspace_bytes << " bytes" << std::endl;
-	cudaMalloc((void**)&this->d_workspace, this->workspace_bytes);
+	std::cout << this->name << " => cuDNN filter tensor descriptor allocation OK!" << std::endl;
 
 
 	return true;
-}
-
-/**
- * @brief This method is invoked by the class destructor and deallocates CUDA resources.
- */
-void ConvLayer::release()
-{
-	std::cout << "Releasing CUDA resources..." << std::endl;
-
-
-	this->size_batch = 0;
-
-
-	if (this->input_gpu != NULL)
-	{
-		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
-		this->input_gpu = NULL;
-	}
-
-	if (this->output_gpu != NULL)
-	{
-		CUDA_SAFE_CALL(cudaFree(this->output_gpu));
-		this->output_gpu = NULL;
-	}
-
-	if (this->filter_gpu != NULL)
-	{
-		CUDA_SAFE_CALL(cudaFree(this->filter_gpu));
-		this->filter_gpu = NULL;
-	}
-
-	if (this->save_residual_gpu != NULL)
-	{
-		CUDA_SAFE_CALL(cudaFree(this->save_residual_gpu));
-		this->save_residual_gpu = NULL;
-	}
-	if (this->d_workspace != NULL)
-	{
-		CUDA_SAFE_CALL(cudaFree(this->d_workspace));
-		this->d_workspace = NULL;
-	}
-
-
-	cudnnDestroyTensorDescriptor(this->input_descriptor);
-	cudnnDestroyTensorDescriptor(this->output_descriptor);
-	cudnnDestroyFilterDescriptor(this->kernel_descriptor);
-	cudnnDestroyConvolutionDescriptor(this->convolution_descriptor);
-
-	cudnnDestroy(this->cudnn);
 }
 
 
@@ -150,6 +87,7 @@ ConvLayer::ConvLayer(const char* name,
 					 unsigned filter_width,
 					 unsigned input_channels,
 					 unsigned output_channels,
+					 const float* filters,
 					 unsigned stride_vertical,
 					 unsigned stride_horizontal,
 					 unsigned pad_h,
@@ -206,13 +144,113 @@ ConvLayer::ConvLayer(const char* name,
 
 	// Initialize cuDNN data structures.
 	this->initialize_cuDNN();
+
+	// Initialize filters.
+	this->initialize_filters(filters);
 }
 
 
 
 // *** PUBLIC METHODS DEFINITIONS *** //
 
-void ConvLayer::download_output_gpu(float* output)
+/**
+ * @brief This method is invoked by the class destructor and deallocates CUDA resources.
+ */
+void ConvLayer::release()
+{
+	std::cout << "Releasing CUDA resources..." << std::endl;
+
+
+	this->size_batch = 0;
+
+
+	if (this->input_gpu != NULL)
+	{
+		CUDA_SAFE_CALL(cudaFree(this->input_gpu));
+		this->input_gpu = NULL;
+	}
+
+	if (this->output_gpu != NULL)
+	{
+		CUDA_SAFE_CALL(cudaFree(this->output_gpu));
+		this->output_gpu = NULL;
+	}
+
+	if (this->filter_gpu != NULL)
+	{
+		CUDA_SAFE_CALL(cudaFree(this->filter_gpu));
+		this->filter_gpu = NULL;
+	}
+
+	if (this->save_residual_gpu != NULL)
+	{
+		CUDA_SAFE_CALL(cudaFree(this->save_residual_gpu));
+		this->save_residual_gpu = NULL;
+	}
+	if (this->d_workspace != NULL)
+	{
+		CUDA_SAFE_CALL(cudaFree(this->d_workspace));
+		this->d_workspace = NULL;
+	}
+
+
+	cudnnDestroyTensorDescriptor(this->input_descriptor);
+	cudnnDestroyTensorDescriptor(this->output_descriptor);
+	cudnnDestroyFilterDescriptor(this->kernel_descriptor);
+	cudnnDestroyConvolutionDescriptor(this->convolution_descriptor);
+
+	cudnnDestroy(this->cudnn);
+}
+
+/**
+ * @brief This method performs a few sanity check operations to ensure that everything is going well.
+ */
+ConvLayer* ConvLayer::ready()
+{
+	// Pointers sanity check.
+	if (this->input_gpu == NULL || this->input_size() == 0)
+	{
+		fprintf(stderr, "Input data has not been uploaded to GPU.\n");
+		exit(1);
+	}
+	if (this->output_gpu == NULL || this->output_size() == 0)
+	{
+		fprintf(stderr, "Output on GPU has not been allocated.\n");
+		exit(1);
+	}
+	if (this->filter_gpu == NULL || this->filter_size() == 0)
+	{
+		fprintf(stderr, "Output on GPU has not been allocated.\n");
+		exit(1);
+	}
+	if (this->save_residual && this->save_residual_gpu == NULL)
+	{
+		fprintf(stderr, "Residual for saving on GPU has not been allocated.\n");
+		exit(1);
+	}
+
+
+
+	// *** Compute the workspace required by the selected cuDNN algorithm. *** //
+	cudnnStatus_t status;
+	this->workspace_bytes = 0;
+	status = cudnnGetConvolutionForwardWorkspaceSize(this->cudnn,
+													 this->input_descriptor,
+													 this->kernel_descriptor,
+													 this->convolution_descriptor,
+													 this->output_descriptor,
+													 this->convolution_algorithm,
+													 &this->workspace_bytes);
+	if (status != CUDNN_STATUS_SUCCESS) return 0;
+	std::cout << this->name << " => cuDNN workspace size calc OK!" << std::endl;
+	std::cout << this->name << " => Workspace size: " << this->workspace_bytes << " bytes" << std::endl;
+	cudaMalloc((void**)&this->d_workspace, this->workspace_bytes);
+
+
+	return this;
+}
+
+void ConvLayer::download_output_gpu(void* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }
@@ -222,51 +260,17 @@ void ConvLayer::download_residual_gpu(float* residual)
 	CUDA_SAFE_CALL(cudaMemcpy(residual, this->save_residual_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }
 
-/**
- * @brief This method loads the filter and batch normalization (if required) data needed by the layer.
- *
- * @param filters Pointer to a region of memory containing the values of the filters, according to the NCHW format.
- * @param bn Pointer to a region of memory containing the batch normalization data (one value per output channel).
- */
-bool ConvLayer::initialize_filters(const float* filters)
-{
-	// Read and allocate filters data.
-	std::cout << this->name << " => Copying filter data from CPU to GPU..." << std::endl;
-	std::cout << this->name << " => Filter bytes: " << filter_bytes() << std::endl;
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->filter_gpu), filter_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->filter_gpu, filters, filter_bytes(), cudaMemcpyHostToDevice));
-
-
-
-	cudnnStatus_t status;
-
-	// Allocate kernel tensor data structures.
-	cudnnCreateFilterDescriptor(&this->kernel_descriptor);
-	status = cudnnSetFilter4dDescriptor(this->kernel_descriptor,
-										/*dataType=*/CUDNN_DATA_FLOAT,
-										/*format=*/CUDNN_TENSOR_NCHW,
-										/*out_channels=*/this->output_channels,
-										/*in_channels=*/this->input_channels,
-										/*kernel_height=*/this->filter_height,
-										/*kernel_width=*/this->filter_width);
-	if (status != CUDNN_STATUS_SUCCESS) return false;
-	std::cout << this->name << " => cuDNN filter tensor descriptor allocation OK!" << std::endl;
-
-
-	return true;
-}
-
-bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
+void ConvLayer::load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input)
 {
 	// Save the number of images in the dataset.
-	this->size_batch = batch_size;
+	this->size_batch = size_batch;
 
 
 	// Allocate and then set input array on GPU.
 	std::cout << this->name << " => Allocating space for, and then loading image data on GPU..." << std::endl;
 	std::cout << this->name << " => Number of bytes to be loaded: " << this->input_bytes() << std::endl;
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, img_data, this->input_bytes(), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input[0], this->input_bytes(), cudaMemcpyHostToDevice));
 
 
 
@@ -287,23 +291,19 @@ bool ConvLayer::load_input(const unsigned& batch_size, const float* img_data)
 										/*channels=*/this->input_channels,
 										/*image_height=*/this->input_height,
 										/*image_width=*/this->input_width);
-	if (status != CUDNN_STATUS_SUCCESS) return false;
+	if (status != CUDNN_STATUS_SUCCESS) exit(1);
 	std::cout << this->name << " => cuDNN input tensor descriptor allocation OK!" << std::endl;
 
 
 	// Allocate space for the output.
-	bool check = this->allocate_output_gpu();
-
-
-	// Sanity check on various pointers and data structures to ensure that the layer is ready to be executed.
-	return check;
+	this->allocate_output_gpu();
 }
 
-bool ConvLayer::set_input_gpu(float* input_gpu, const unsigned& batch_size)
+void ConvLayer::set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
 {
 	// Save the number of images in the dataset.
-	this->size_batch = batch_size;
-	this->input_gpu = input_gpu;
+	this->size_batch = size_batch;
+	this->input_gpu = static_cast<float*>(input_gpu[0]);
 
 
 
@@ -324,19 +324,15 @@ bool ConvLayer::set_input_gpu(float* input_gpu, const unsigned& batch_size)
 										/*channels=*/this->input_channels,
 										/*image_height=*/this->input_height,
 										/*image_width=*/this->input_width);
-	if (status != CUDNN_STATUS_SUCCESS) return false;
+	if (status != CUDNN_STATUS_SUCCESS) return exit(1);
 	std::cout << this->name << " => cuDNN input tensor descriptor allocation OK!" << std::endl;
 
 
 	// Allocate space for the output.
-	bool check = this->allocate_output_gpu();
-
-
-	// Sanity check on various pointers and data structures to ensure that the layer is ready to be executed.
-	return check;
+	this->allocate_output_gpu();
 }
 
-bool ConvLayer::allocate_output_gpu()
+void ConvLayer::allocate_output_gpu()
 {
 	// Allocate space for output.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->output_gpu), this->output_bytes()));
@@ -363,10 +359,8 @@ bool ConvLayer::allocate_output_gpu()
 										  /*channels=*/this->output_channels,
 										  /*image_height=*/this->output_height,
 										  /*image_width=*/this->output_width);
-	if (status != CUDNN_STATUS_SUCCESS) return false;
+	if (status != CUDNN_STATUS_SUCCESS) exit(1);
 	std::cout << this->name << " => cuDNN output tensor descriptor allocation OK!" << std::endl;
-
-	return true;
 }
 
 void ConvLayer::execute_layer()

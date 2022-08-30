@@ -68,17 +68,14 @@ int test_convfp_layer()
 							filter_height,
 							filter_width,
 							image_channels,
-							num_filters);
-
+							num_filters,
+							filter_test);
 
 
 	//================ Layer execution =================
 
-	// Setup ConvLayer filters.
-	in_conv_layer.initialize_filters(filter_test);
-
 	// Load ConvLayer input data.
-	in_conv_layer.load_input(size_batch, img_data);
+	in_conv_layer.load_input_gpu(size_batch, {img_data});
 
 	// Perform the last actions to prepare the layer for its execution.
 	in_conv_layer.ready();
