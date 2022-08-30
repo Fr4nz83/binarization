@@ -49,8 +49,8 @@ public:
 	virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input) = 0;
 	virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu) = 0;
 
-	virtual float* get_output_gpu() = 0;
-	virtual void download_output_gpu(float* output) = 0;
+	virtual void* get_output_gpu() = 0;
+	virtual void download_output_gpu(void* output) = 0;
 
 	virtual void execute_layer() = 0;
 };
@@ -123,8 +123,8 @@ public:
 		this->size_batch = size_batch;
 	}
 
-	inline virtual float* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
-	inline virtual void download_output_gpu(float* output);
+	inline virtual void* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
 
 	inline virtual void execute_layer();
 };
@@ -193,8 +193,8 @@ public:
 		this->size_batch = size_batch;
 	}
 
-	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
-	inline virtual void download_output_gpu(float* output);
+	inline virtual void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
 
 	inline virtual void execute_layer();
 };
@@ -327,7 +327,7 @@ public:
 
 
 
-class BinaryMultiplicationLayer
+class BinaryMultiplicationLayer : public Layer
 {
 public:
 
@@ -380,29 +380,34 @@ public:
 
 	// *** METHODS *** //
 
-	inline void release();
-	BinaryMultiplicationLayer* ready();
+	inline virtual void release();
+	virtual BinaryMultiplicationLayer* ready();
 
 	inline void init_bin_weights(const float* weights, const float* bias);
 
-	inline int input_size() {return this->input_height * this->input_width;}
-	inline int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_size_batch() {return this->get_input_heigth();} // NOTE: this output of this function is effectively meaningless if
+																		   // we're just performing a simple matrix multiplication.
+
+	inline virtual int input_size() {return this->input_height * this->input_width;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
     int input_bit_size() {return FEIL(this->input_height) * CEIL(this->input_width);}
     int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
-	inline int get_input_width() {return this->input_width;}
-	inline int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return 1;} // NOTE: the output of this function is meaningless in this layer.
 
 	// The function below returns the pointer to the binarized input.
 	// NOTE: used only for debugging purposes.
 	inline unsigned* get_ptr_input_bin_gpu() {auto tmp = this->input_bin_gpu; this->input_bin_gpu = NULL; return tmp;}
 
-	inline int output_size() {return this->input_height * this->weights_width;}
-	inline int output_bytes() {return this->output_size() * sizeof(float);}
+	inline virtual int output_size() {return this->input_height * this->weights_width;}
+	inline virtual int output_bytes() {return this->output_size() * sizeof(float);}
     int output_bit_size() {return !this->transpose_output ? FEIL(this->input_height) * CEIL(this->weights_width) :
     														CEIL(this->input_height) * FEIL(this->weights_width);}
     int output_bit_bytes() {return output_bit_size() * sizeof(unsigned);}
-	inline int get_output_width() {return !this->transpose_output ? this->weights_width : this->input_height;}
-	inline int get_output_height() {return !this->transpose_output ? this->input_height : this->weights_width;}
+	inline int virtual get_output_width() {return !this->transpose_output ? this->weights_width : this->input_height;}
+	inline int virtual get_output_height() {return !this->transpose_output ? this->input_height : this->weights_width;}
+	inline virtual int get_output_channels() {return get_input_channels();} // NOTE: the output of this function is meaningless in this layer.
 
 	inline int weights_size() {return this->weights_width * this->weights_height;}
 	inline int weight_bytes() {return this->weights_size() * sizeof(float);}
@@ -411,11 +416,11 @@ public:
 	inline int get_weights_width() {return this->weights_width;}
 	inline int get_weights_height() {return this->weights_height;}
 
-	inline void allocate_output_gpu();
-	inline void load_input_gpu(void* input, unsigned input_height);
-	inline void set_input_gpu(void* input_gpu, unsigned input_height);
+	inline virtual void allocate_output_gpu();
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
 
-	inline void* get_output_gpu()
+	inline virtual void* get_output_gpu()
 	{
 		// NOTE: the set of assignments below transfer the responsibility of the management of
 		// the GPU output pointer to the caller (hence the NULL).
@@ -424,9 +429,9 @@ public:
 		else this->output_bin_gpu = NULL;
 		return tmp;
 	}
-	inline void download_output_gpu(void* output);
+	inline virtual void download_output_gpu(void* output);
 
-	inline void execute_layer();
+	inline virtual void execute_layer();
 };
 
 // Pull in the definitions of the methods associated with the class ConvLayer.
@@ -490,8 +495,8 @@ public:
 		this->input2_gpu = static_cast<float*>(input_gpu[1]);
 	}
 
-	inline virtual float* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
-	inline virtual void download_output_gpu(float* output);
+	inline virtual void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
 
 	inline virtual void execute_layer();
 };

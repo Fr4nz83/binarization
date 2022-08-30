@@ -189,9 +189,9 @@ void BinaryMultiplicationLayer::allocate_output_gpu()
 	}
 }
 
-void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_height)
+void BinaryMultiplicationLayer::load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input)
 {
-	this->input_height = input_height;
+	this->input_height = size_batch;
 
 
 	// Check if we need to reset the state of the binarized input.
@@ -212,7 +212,7 @@ void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_heigh
 
 		// Allocate the memory required by the FP input, and then copy the input data from CPU to GPU.
 		CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
-		CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, (float*)input, this->input_bytes(), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, static_cast<float*>(input[0]), this->input_bytes(), cudaMemcpyHostToDevice));
 		std::cout << "Memory required by the FP input: " << this->input_bytes() << " bytes." << std::endl;
 
 		// Set the initial state of the binarized input.
@@ -220,7 +220,7 @@ void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_heigh
 	}
 	else
 	{
-		CUDA_SAFE_CALL(cudaMemcpy(this->input_bin_gpu, (unsigned*)input, this->input_bit_bytes(), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy(this->input_bin_gpu, static_cast<unsigned*>(input[0]), this->input_bit_bytes(), cudaMemcpyHostToDevice));
 	}
 
 
@@ -228,9 +228,9 @@ void BinaryMultiplicationLayer::load_input_gpu(void* input, unsigned input_heigh
 	this->allocate_output_gpu();
 }
 
-inline void BinaryMultiplicationLayer::set_input_gpu(void* input_gpu, unsigned input_height)
+inline void BinaryMultiplicationLayer::set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
 {
-	this->input_height = input_height;
+	this->input_height = size_batch;
 
 
 	// Check if we need to reset the state of the binarized input.
@@ -244,13 +244,13 @@ inline void BinaryMultiplicationLayer::set_input_gpu(void* input_gpu, unsigned i
 		if(this->input_gpu != NULL)
 			CUDA_SAFE_CALL(cudaFree(this->input_gpu));
 
-		this->input_gpu = (float*)input_gpu;
+		this->input_gpu = static_cast<float*>(input_gpu[0]);
 
 		CUDA_SAFE_CALL(cudaMemset(this->input_bin_gpu, 0, this->input_bit_bytes()));
 	}
 	else
 	{
-		this->input_bin_gpu = (unsigned*)input_gpu;
+		this->input_bin_gpu = static_cast<unsigned*>(input_gpu[0]);
 	}
 
 	// Allocate the output of the GPU.

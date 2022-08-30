@@ -110,7 +110,7 @@ void MatrixSumLayer::load_input_gpu(const unsigned& size_batch, const std::vecto
 	this->allocate_output_gpu();
 }
 
-void MatrixSumLayer::download_output_gpu(float* output)
+void MatrixSumLayer::download_output_gpu(void* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }

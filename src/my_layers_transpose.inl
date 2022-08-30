@@ -87,7 +87,7 @@ void TransposeFullPrecLayer::load_input_gpu(const unsigned& size_batch, const st
 	this->allocate_output_gpu();
 }
 
-void TransposeFullPrecLayer::download_output_gpu(float* output)
+void TransposeFullPrecLayer::download_output_gpu(void* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->output_gpu, this->input_bytes(), cudaMemcpyDeviceToHost));
 }

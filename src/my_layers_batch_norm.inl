@@ -105,7 +105,7 @@ void BatchNormFullPrecLayer::load_input_gpu(const unsigned& size_batch, const st
 	this->allocate_output_gpu();
 }
 
-void BatchNormFullPrecLayer::download_output_gpu(float* output)
+void BatchNormFullPrecLayer::download_output_gpu(void* output)
 {
 	CUDA_SAFE_CALL(cudaMemcpy(output, this->input_gpu, this->output_bytes(), cudaMemcpyDeviceToHost));
 }

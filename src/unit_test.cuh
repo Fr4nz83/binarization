@@ -330,8 +330,6 @@ int test_bin_multi()
 {
 	std::cout << "*** Binary multiplication layer unit test *** " << std::endl;
 	constexpr bool check_correctness = true;
-	constexpr bool binarized_input = false;
-	constexpr bool binarize_output = false;
 	constexpr bool apply_gelu = true;
 	constexpr bool transposed_output_gpu = false;
 
@@ -345,7 +343,7 @@ int test_bin_multi()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 40000,	// # of input entries.
+	constexpr uint32_t input_height = 4000,	// # of input entries.
 					   weights_height = 1000,	// # of features
 					   weights_width = 1000;		// # Activation units
 
@@ -389,8 +387,8 @@ int test_bin_multi()
 									weights_width,  // Activation units
 									weights_data,   // Pointer to the weights array
 									bias_data,	 	// Pointer to the bias vector
-									binarized_input, // Flag indicating whether the input given to the layer has already been binarized.
-									binarize_output, // Flag indicating whether the output produced by the layer must be binarized or not.
+									false, // Flag indicating whether the input given to the layer has already been binarized.
+									false, // Flag indicating whether the output produced by the layer must be binarized or not.
 									transposed_output_gpu, // Flag indicating whether the output matrix must be transposed or not.
 									apply_gelu);	// Flag indicating whether the GELU has to be applied.
 
@@ -407,7 +405,7 @@ int test_bin_multi()
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	cudaEventRecord(start);
 	std::cout << "Initializing the input and output of the layer..." << std::endl;
-	bm_l1.load_input_gpu(img_data, input_height);
+	bm_l1.load_input_gpu(input_height, {img_data});
 	cudaEventRecord(end_load);
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
@@ -601,7 +599,7 @@ int test_bin_multi_bin_input()
 
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	std::cout << "Binarizing the input matrix..." << std::endl;
-	bm_l1.load_input_gpu(img_data, input_height);
+	bm_l1.load_input_gpu(input_height, {img_data});
 	bm_l1.execute_layer();
 
 
@@ -618,7 +616,7 @@ int test_bin_multi_bin_input()
 
 
 	// 4 - Here we get the binarized input matrix from the first layer, and then execute the second layer.
-	bm_l2.set_input_gpu(bm_l1.get_ptr_input_bin_gpu(), input_height);
+	bm_l2.set_input_gpu(input_height, {bm_l1.get_ptr_input_bin_gpu()});
 	bm_l2.execute_layer();
 
 
@@ -730,7 +728,7 @@ int test_bin_multi_bin_out()
 	constexpr bool binarized_input = false;
 	constexpr bool binarize_output = true;
 	constexpr bool apply_gelu = true;
-	constexpr bool transposed_output_gpu = false;
+	constexpr bool transposed_output_gpu = true;
 
 
 
@@ -742,9 +740,9 @@ int test_bin_multi_bin_out()
 
 	//=============== Read image dataset =================
 
-	constexpr uint32_t input_height = 3000,	// # of input entries.
+	constexpr uint32_t input_height = 3000,		// # of input entries.
 					   weights_height = 1000,	// # of features
-					   weights_width = 1000;		// # Activation units
+					   weights_width = 1000;	// # Activation units
 
 	// Generate a random matrix representing the image dataset.
 	std::vector<float> tmp_img = gen_matrix(input_height, weights_height);
@@ -805,7 +803,7 @@ int test_bin_multi_bin_out()
 	// 2 - Copy input data from CPU to GPU and allocate space for the final output.
 	cudaEventRecord(start);
 	std::cout << "Initializing the input and output of the layer..." << std::endl;
-	bm_l1.load_input_gpu(img_data, input_height);
+	bm_l1.load_input_gpu(input_height, {img_data});
 	cudaEventRecord(end_load);
 
 	// 3 - Execute the layer, which is actually (1) input binarization, then (2) binary multiplication...
