@@ -20,7 +20,7 @@ class Layer
 {
 public:
 
-	// *** CTORS / DTOR *** //
+	// *** PUBLIC CTORS / DTOR *** //
 
 	virtual ~Layer() {};
 
