@@ -420,11 +420,11 @@ public:
 
 	inline virtual int input_size() {return this->input_height * this->input_width;}
 	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
-    inline int input_bit_size() {return FEIL(this->input_height) * CEIL(this->input_width);}
-    inline int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
 	inline virtual int get_input_width() {return this->input_width;}
 	inline virtual int get_input_heigth() {return this->input_height;}
 	inline virtual int get_input_channels() {return 1;} // NOTE: the output of this function is meaningless in this layer.
+    inline int input_bit_size() {return FEIL(this->input_height) * CEIL(this->input_width);}
+    inline int input_bit_bytes() {return input_bit_size() * sizeof(unsigned);}
 
 	// The function below returns the pointer to the binarized input.
 	// NOTE: used only for debugging purposes.
@@ -432,12 +432,12 @@ public:
 
 	inline virtual int output_size() {return this->input_height * this->weights_width;}
 	inline virtual int output_bytes() {return this->output_size() * sizeof(float);}
-    inline int output_bit_size() {return !this->transpose_output ? FEIL(this->input_height) * CEIL(this->weights_width) :
-    															   CEIL(this->input_height) * FEIL(this->weights_width);}
-    inline int output_bit_bytes() {return output_bit_size() * sizeof(unsigned);}
 	inline int virtual get_output_width() {return !this->transpose_output ? this->weights_width : this->input_height;}
 	inline int virtual get_output_height() {return !this->transpose_output ? this->input_height : this->weights_width;}
 	inline virtual int get_output_channels() {return get_input_channels();} // NOTE: the output of this function is meaningless in this layer.
+    inline int output_bit_size() {return !this->transpose_output ? FEIL(this->input_height) * CEIL(this->weights_width) :
+    															   CEIL(this->input_height) * FEIL(this->weights_width);}
+    inline int output_bit_bytes() {return output_bit_size() * sizeof(unsigned);}
 
 	inline int weights_size() {return this->weights_width * this->weights_height;}
 	inline int weight_bytes() {return this->weights_size() * sizeof(float);}
