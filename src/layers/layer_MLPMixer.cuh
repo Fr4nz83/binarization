@@ -59,8 +59,13 @@ protected:
 
 public:
 
+	// *** PUBLIC TYPES *** //
+
+
+
 	// *** PUBLIC CTORS / DTOR *** //
 
+	// TODO: da implementare.
 	MLPMixer(const char* name,
 			 const unsigned& in_height,
 			 const unsigned& in_width,
@@ -74,7 +79,6 @@ public:
 
 	// *** PUBLIC METHODS *** //
 
-	// TODO: da implementare.
 	inline virtual void release();
 	inline virtual MLPMixer* ready();
 
@@ -103,7 +107,7 @@ public:
 	inline virtual void download_output_gpu(void* output) {};
 
 	// TODO: da implementare.
-	inline void execute_layer() {};
+	inline virtual void execute_layer();
 };
 
 
@@ -219,4 +223,9 @@ MLPMixer* MLPMixer::ready()
 
 	// Return the pointer to the shadow copy (to be used within a kernel).
 	return this;
+}
+
+void MLPMixer::execute_layer()
+{
+
 }
