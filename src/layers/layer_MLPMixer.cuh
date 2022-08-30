@@ -16,24 +16,29 @@
 
 
 
-class MLPMixer
+class MLPMixer : public Layer
 {
-public:
+protected:
 
 	// *** FIELDS *** //
+
+	unsigned input_size_batch;
 
 	// Input fields.
 	float* input_gpu;			// Memory allocated for FP input.
 	unsigned input_height;
 	unsigned input_width;
 	unsigned input_channels;
-	unsigned input_size_batch;
+
 
 	// Output fields.
 	float* output_gpu;			// Memory allocated for FP output.
+	unsigned output_height;
+	unsigned output_width;
+	unsigned output_channels;
 
 
-	// Residuals that at some points are used within the MLP-Mixer block.
+	// Residuals used within the MLP-Mixer block.
 	float* gpu_residuals_1;
 	float* gpu_residuals_2;
 
@@ -52,47 +57,50 @@ public:
 
 
 
-	// *** CTORS / DTOR *** //
+public:
+
+	// *** PUBLIC CTORS / DTOR *** //
 
 	MLPMixer(const char* name,
-			 BatchNormFullPrecLayer* bn1_layer,
-	         BinaryMultiplicationLayer* bmm1_layer,
-	         BinaryMultiplicationLayer* bmm2_layer,
-	         BatchNormFullPrecLayer* bn2_layer,
-	         BinaryMultiplicationLayer* bmm3_layer,
-	         BinaryMultiplicationLayer* bmm4_layer);
-	~MLPMixer(){this->release();};
+			 const unsigned& in_height,
+			 const unsigned& in_width,
+			 const unsigned& in_channels,
+			 const unsigned& out_width,
+			 const unsigned& out_height,
+			 const unsigned& out_channels);
+	virtual ~MLPMixer(){this->release();};
 
 
 
-	// *** METHODS *** //
-
-	inline void release() {};
-	inline MLPMixer* ready() {return this;};
-
-	inline int get_input_size_batch() {return this->input_size_batch;}
-
-	inline int input_size() {return this->input_size_batch * this->input_height * this->input_width * this->input_channels;}
-	inline int input_bytes() {return this->input_size() * sizeof(float);}
-	inline int get_input_width() {return this->input_width;}
-	inline int get_input_heigth() {return this->input_height;}
-	inline int get_input_channels() {return this->input_channels;}
-
-	inline int output_size() {return this->input_size();}
-	inline int output_bytes() {return this->input_bytes();}
-	inline int get_output_width() {return this->get_input_width();}
-	inline int get_output_height() {return this->get_input_heigth();}
-	inline int get_output_channels() {return this->get_input_channels();};
-	inline int get_output_size_batch() {return this->get_input_size_batch();};
+	// *** PUBLIC METHODS *** //
 
 	// TODO: da implementare.
-	inline void allocate_output_gpu() {};
-	inline void load_input_gpu(void* input) {};
-	inline void set_input_gpu(void* input_gpu) {};
+	inline virtual void release();
+	inline virtual MLPMixer* ready();
+
+	inline virtual int get_size_batch() {return this->input_size_batch;}
+
+	inline virtual int input_size() {return this->input_size_batch * this->input_height * this->input_width * this->input_channels;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return this->input_channels;}
+
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->get_input_width();}
+	inline virtual int get_output_height() {return this->get_input_heigth();}
+	inline virtual int get_output_channels() {return this->get_input_channels();};
+	inline virtual int get_output_size_batch() {return this->get_size_batch();};
 
 	// TODO: da implementare.
-	inline void* get_output_gpu() {return 0;};
-	inline void download_output_gpu(void* output) {};
+	inline virtual void allocate_output_gpu() {};
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input) {};
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu) {};
+
+	// TODO: da implementare.
+	inline virtual void* get_output_gpu() {return 0;};
+	inline virtual void download_output_gpu(void* output) {};
 
 	// TODO: da implementare.
 	inline void execute_layer() {};
@@ -101,12 +109,114 @@ public:
 
 
 MLPMixer::MLPMixer(const char* name,
-			 	   BatchNormFullPrecLayer* bn1_layer,
-				   BinaryMultiplicationLayer* bmm1_layer,
-				   BinaryMultiplicationLayer* bmm2_layer,
-				   BatchNormFullPrecLayer* bn2_layer,
-				   BinaryMultiplicationLayer* bmm3_layer,
-				   BinaryMultiplicationLayer* bmm4_layer)
-{
+				   const unsigned& size_batch,
+				   const unsigned& in_height,
+				   const unsigned& in_width,
+				   const unsigned& in_channels,
+				   const unsigned& out_width,
+				   const unsigned& out_height) :
 
+input_size_batch(size_batch),
+input_gpu(0),
+input_height(in_height),
+input_width(in_width),
+input_channels(in_channels),
+output_gpu(0),
+output_height(out_height),
+output_width(out_width),
+output_channels(in_channels)
+{
+	// *** Layers allocation *** //
+
+	this->tr_layer = new TransposeFullPrecLayer("tr",
+											    this->input_width,
+											    this->input_height,
+												this->input_channels);
+
+	this->sum_layer = new MatrixSumLayer("sum",
+										 this->input_width,
+										 this->input_height * this->input_channels);
+}
+
+void MLPMixer::release()
+{
+	std::cout << "Dealloc instance / CUDA resources..." << std::endl;
+
+
+	// Dealloc data space (may be NULL in case this layer is connected to other layers).
+	if(this->input_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->input_gpu) );
+		this->input_gpu = NULL;
+	}
+
+	if(this->output_gpu != NULL)
+	{
+		CUDA_SAFE_CALL( cudaFree(this->output_gpu) );
+		this->output_gpu = NULL;
+	}
+
+
+	// Dealloc objects allocated in the heap.
+	if(this->bn1_layer != NULL)
+		delete this->bn1_layer;
+
+	if(this->bn2_layer != NULL)
+		delete this->bn2_layer;
+
+	if(this->bmm1_layer != NULL)
+		delete this->bmm1_layer;
+
+	if(this->bmm2_layer != NULL)
+		delete this->bmm2_layer;
+
+	if(this->bmm3_layer != NULL)
+		delete this->bmm3_layer;
+
+	if(this->bmm4_layer != NULL)
+		delete this->bmm4_layer;
+
+	if(this->tr_layer != NULL)
+		delete this->tr_layer;
+
+	if(this->sum_layer != NULL)
+		delete this->sum_layer;
+}
+
+MLPMixer* MLPMixer::ready()
+{
+	// Various checks...
+	if(this->input_gpu == NULL || this->input_size() == 0)
+	{
+		std::cout << "ERROR: Input data has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	if(this->output_gpu == NULL || this->output_size() == 0)
+	{
+		std::cout << "ERROR: Output has not been allocated/initialized on the GPU." << std::endl;
+		exit(1);
+	}
+
+	if(this->bn1_layer == NULL || this->bn2_layer == NULL)
+	{
+		std::cout << "ERROR: At least one of the batch normalization layers has not been initialized." << std::endl;
+		exit(1);
+	}
+
+	if(this->bmm1_layer == NULL || this->bmm2_layer == NULL || this->bmm3_layer == NULL || this->bmm4_layer == NULL)
+	{
+		std::cout << "ERROR: At least one of the binary matrix multiplication layers has not been initialized." << std::endl;
+		exit(1);
+	}
+
+	if(this->tr_layer == NULL || this->sum_layer == NULL)
+	{
+		std::cout << "ERROR: Either the matrix transposition or the sum layer has not been initialized." << std::endl;
+		exit(1);
+	}
+
+
+	// Return the pointer to the shadow copy (to be used within a kernel).
+	return this;
 }
