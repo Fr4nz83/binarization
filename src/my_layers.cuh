@@ -222,7 +222,7 @@ public:
  */
 class ConvLayer
 {
-public:
+protected:
 
 	// *** FIELDS *** //
 
@@ -277,6 +277,8 @@ public:
 
 
 
+public:
+
 	// *** PUBLIC CTORS / DTOR *** //
 
 	ConvLayer(const char* name,
@@ -292,7 +294,7 @@ public:
 			  unsigned pad_w = 0,
 			  bool same_conv = true,
 			  bool save_residual = true);
-	~ConvLayer() {release();}
+	~ConvLayer() {this->release();}
 
 
 
