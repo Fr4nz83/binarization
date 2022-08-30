@@ -1,9 +1,3 @@
-// *** FORWARD DECLARATIONS OF CUDA KERNELS USED BY THIS CLASS *** //
-
-__global__ void BNFPLayer(BatchNormFullPrecLayer* p);
-
-
-
 // *** CTORS/DTOR DEFINITIONS *** //
 
 BatchNormFullPrecLayer::BatchNormFullPrecLayer(const char* name,
@@ -30,6 +24,8 @@ gpu(NULL)
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->shift_gpu), data_channels * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpy(this->shift_gpu, shift, data_channels * sizeof(float), cudaMemcpyHostToDevice));
 }
+
+
 
 // *** PUBLIC METHODS DEFINITIONS *** //
 

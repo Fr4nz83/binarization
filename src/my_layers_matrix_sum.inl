@@ -1,10 +1,4 @@
-// *** FORWARD DECLARATIONS OF KERNELS USED BY THIS CLASS *** //
-
-__global__ void Matrix_Sum(MatrixSumLayer* p);
-
-
-
-// *** CTORS/DTOR DEFINITIONS *** //
+// *** PUBLIC CTORS/DTOR DEFINITIONS *** //
 
 MatrixSumLayer::MatrixSumLayer(const char* name,
 				     	 	   const unsigned& data_width,

@@ -1,19 +1,49 @@
 #include "math_constants.h"
 
 
-// *** FORWARD DECLARATIONS OF KERNELS USED BY THIS CLASS *** //
+// *** CUDA KERNEL FORWARD DECLARATIONS *** //
 
 __global__ void PackWeight32(const float* __restrict__ A, unsigned* B,
 							 const int A_height, const int A_width);
-__global__ void Input_Binarization(BinaryMultiplicationLayer *p);
-__global__ void Mat_BinMul(BinaryMultiplicationLayer* p);
-__global__ void Mat_BinMul_T(BinaryMultiplicationLayer* p);
-__global__ void Mat_BinMul_OutBin(BinaryMultiplicationLayer* p);
-__global__ void Mat_BinMul_T_OutBin(BinaryMultiplicationLayer* p);
 
 
 
-// *** CTORS/DTOR DEFINITIONS *** //
+// *** PROTECTED METHOD DEFINITIONS *** //
+
+void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const float* bias)
+{
+	float* tmp_fp_weights_gpu;
+
+	// Copy the float weights from CPU to GPU.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(tmp_fp_weights_gpu), this->weight_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(tmp_fp_weights_gpu, weights, this->weight_bytes(), cudaMemcpyHostToDevice));
+
+
+	// Allocate the memory required by the binarized weights.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->weights_gpu), this->weight_bit_bytes()));
+	std::cout << "Memory required by the binarized weights: " << this->weight_bit_bytes() << " bytes." << std::endl;
+
+
+	// Binarize the float weights.
+	// NOTA: con dim3 le dimensioni non specificate vengono lasciate pari a 1.
+	// NOTA2: qui sotto il kernel e' lanciato con una griglia di blocchi di thread con dimensione pari a "ceil(height/32) x ceil(width/32) x 1".
+	// NOTA3: il kernel richiede che ogni thread-block giri con soli 32 thread (quindi un solo warp per thread-block).
+	PackWeight32 <<<dim3(CEIL(weights_height), CEIL(weights_width)), 32>>>
+				 	(tmp_fp_weights_gpu, this->weights_gpu, this->weights_height, this->weights_width);
+
+
+	// Release the device memory temporarily used to binarize the float weights.
+	CUDA_SAFE_CALL(cudaFree(tmp_fp_weights_gpu));
+
+
+	// Copy the bias info to the GPU.
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->bias_gpu), this->weights_width * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(this->bias_gpu, bias, this->weights_width * sizeof(float), cudaMemcpyHostToDevice));
+}
+
+
+
+// *** PUBLIC CTORS/DTOR DEFINITIONS *** //
 
 BinaryMultiplicationLayer::BinaryMultiplicationLayer(const char* name,
 													 const unsigned& weigths_height, // This corresponds to number of features.
@@ -143,37 +173,6 @@ BinaryMultiplicationLayer* BinaryMultiplicationLayer::ready()
 
 	// Return the pointer to the shadow copy (to be used within a kernel).
 	return this->gpu;
-}
-
-void BinaryMultiplicationLayer::init_bin_weights(const float* weights, const float* bias)
-{
-	float* tmp_fp_weights_gpu;
-
-	// Copy the float weights from CPU to GPU.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(tmp_fp_weights_gpu), this->weight_bytes()));
-	CUDA_SAFE_CALL(cudaMemcpy(tmp_fp_weights_gpu, weights, this->weight_bytes(), cudaMemcpyHostToDevice));
-
-
-	// Allocate the memory required by the binarized weights.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->weights_gpu), this->weight_bit_bytes()));
-	std::cout << "Memory required by the binarized weights: " << this->weight_bit_bytes() << " bytes." << std::endl;
-
-
-	// Binarize the float weights.
-	// NOTA: con dim3 le dimensioni non specificate vengono lasciate pari a 1.
-	// NOTA2: qui sotto il kernel e' lanciato con una griglia di blocchi di thread con dimensione pari a "ceil(height/32) x ceil(width/32) x 1".
-	// NOTA3: il kernel richiede che ogni thread-block giri con soli 32 thread (quindi un solo warp per thread-block).
-	PackWeight32 <<<dim3(CEIL(weights_height), CEIL(weights_width)), 32>>>
-				 	(tmp_fp_weights_gpu, this->weights_gpu, this->weights_height, this->weights_width);
-
-
-	// Release the device memory temporarily used to binarize the float weights.
-	CUDA_SAFE_CALL(cudaFree(tmp_fp_weights_gpu));
-
-
-	// Copy the bias info to the GPU.
-	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->bias_gpu), this->weights_width * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpy(this->bias_gpu, bias, this->weights_width * sizeof(float), cudaMemcpyHostToDevice));
 }
 
 void BinaryMultiplicationLayer::allocate_output_gpu()

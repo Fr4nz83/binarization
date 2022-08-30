@@ -1,10 +1,4 @@
-// *** FORWARD DECLARATIONS OF CUDA KERNELS USED BY THIS CLASS *** //
-
-__global__ void TransposeFPLayer(TransposeFullPrecLayer* p);
-
-
-
-// *** CTORS/DTOR DEFINITIONS *** //
+// *** PUBLIC CTORS/DTOR DEFINITIONS *** //
 
 TransposeFullPrecLayer::TransposeFullPrecLayer(const char* name,
 											   const unsigned& data_width,
@@ -21,6 +15,8 @@ gpu(NULL)
 	strncpy(this->name, name, 8);
 	std::cout << "Invoking constructor for " << this->name << std::endl;
 }
+
+
 
 // *** PUBLIC METHODS DEFINITIONS *** //
 
