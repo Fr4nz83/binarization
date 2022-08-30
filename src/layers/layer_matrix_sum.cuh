@@ -1,3 +1,79 @@
+#pragma once
+
+
+#include "layer.cuh"
+
+
+class MatrixSumLayer : public Layer
+{
+protected:
+
+	// *** PROTECTED FIELDS *** //
+
+	float* input1_gpu;
+	float* input2_gpu;
+	float* output_gpu;
+
+	unsigned input_width;
+	unsigned input_height;
+
+	MatrixSumLayer* gpu; // GPU shadow.
+	char name[8];
+
+
+
+	// *** CUDA KERNEL FRIENDS *** //
+
+	friend __global__ void Matrix_Sum(MatrixSumLayer* p);
+
+
+
+public:
+
+	// *** PUBLIC CTORS/DTOR *** //
+
+	MatrixSumLayer(const char* name,
+			  	   const unsigned& data_width,
+				   const unsigned& data_height);
+	virtual ~MatrixSumLayer(){this->release();};
+
+
+
+	// *** PUBLIC METHODS *** //
+
+	inline virtual void release();
+	virtual MatrixSumLayer* ready();
+
+	inline virtual int get_size_batch() {return 1;}
+
+	inline virtual int input_size() {return this->input_height * this->input_width;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return 1;}
+
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->get_input_width();}
+	inline virtual int get_output_height() {return this->get_input_heigth();}
+	inline virtual int get_output_channels() {return this->get_input_channels();}
+
+	inline virtual void allocate_output_gpu();
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input1_gpu = static_cast<float*>(input_gpu[0]);
+		this->input2_gpu = static_cast<float*>(input_gpu[1]);
+	}
+
+	inline virtual void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
+
+	inline virtual void execute_layer();
+};
+
+
+
 // *** PUBLIC CTORS/DTOR DEFINITIONS *** //
 
 MatrixSumLayer::MatrixSumLayer(const char* name,

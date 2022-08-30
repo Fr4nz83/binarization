@@ -16,8 +16,13 @@
 #include <chrono>
 
 #include "dataset_reader.h"
-#include "my_layers.cuh"
-#include "MLPMixer.cuh"
+
+#include "layers/layer_batch_norm.cuh"
+#include "layers/layer_binmult.cuh"
+#include "layers/layer_conv.cuh"
+#include "layers/layer_transpose.cuh"
+#include "layers/layer_matrix_sum.cuh"
+#include "layers/layer_MLPMixer.cuh"
 
 #include "generator.h"
 #include "cnpy.h"

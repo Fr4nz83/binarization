@@ -9,7 +9,10 @@
 
 /*** INCLUDES ***/
 
-#include "my_layers.cuh"
+#include "layer_batch_norm.cuh"
+#include "layer_binmult.cuh"
+#include "layer_transpose.cuh"
+#include "layer_matrix_sum.cuh"
 
 
 
@@ -95,4 +98,15 @@ public:
 	inline void execute_layer() {};
 };
 
-#include "MLPMixer.inl"
+
+
+MLPMixer::MLPMixer(const char* name,
+			 	   BatchNormFullPrecLayer* bn1_layer,
+				   BinaryMultiplicationLayer* bmm1_layer,
+				   BinaryMultiplicationLayer* bmm2_layer,
+				   BatchNormFullPrecLayer* bn2_layer,
+				   BinaryMultiplicationLayer* bmm3_layer,
+				   BinaryMultiplicationLayer* bmm4_layer)
+{
+
+}

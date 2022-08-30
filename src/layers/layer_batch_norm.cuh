@@ -1,3 +1,90 @@
+#pragma once
+
+
+#include "layer.cuh"
+
+
+/** @brief This class implements a batch normalization layer which can operate on different channels.
+ *
+ *  @note The implementation assumes that a dataset of images follows the NCHW format.
+ */
+class BatchNormFullPrecLayer : public Layer
+{
+protected:
+
+	// *** PROTECTED FIELDS *** //
+
+	unsigned size_batch;
+
+	float* input_gpu;
+
+	unsigned input_width;
+	unsigned input_height;
+	unsigned input_channels;
+
+	float* scale_gpu;
+	float* shift_gpu;
+
+	BatchNormFullPrecLayer* gpu; // GPU shadow.
+	char name[8];
+
+
+
+	// *** FRIEND FUNCTIONS *** //
+
+	friend __global__ void BNFPLayer(BatchNormFullPrecLayer* p);
+
+
+
+public:
+
+	// *** PUBLIC CTORS/DTOR *** //
+
+	BatchNormFullPrecLayer(const char* name,
+						   const unsigned& in_width,
+						   const unsigned& in_height,
+						   const unsigned& in_channels,
+						   const float* scale,
+						   const float* shift);
+	virtual ~BatchNormFullPrecLayer() {this->release();};
+
+
+
+	// *** PUBLIC METHODS *** //
+
+	inline virtual void release();
+	inline virtual BatchNormFullPrecLayer* ready();
+
+	inline virtual int get_size_batch() {return this->size_batch;}
+
+	inline virtual int input_size() {return this->input_channels * this->input_height * this->input_width * this->size_batch;}
+	inline virtual int input_bytes() {return this->input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return this->input_channels;}
+
+	inline virtual int output_size() {return this->input_size();}
+	inline virtual int output_bytes() {return this->input_bytes();}
+	inline virtual int get_output_width() {return this->input_width;}
+	inline virtual int get_output_height() {return this->input_height;}
+	inline virtual int get_output_channels() {return this->input_channels;}
+
+	inline virtual void allocate_output_gpu() {};
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input_gpu = static_cast<float*>(input_gpu[0]);
+		this->size_batch = size_batch;
+	}
+
+	inline virtual void* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
+
+	inline virtual void execute_layer();
+};
+
+
+
 // *** CTORS/DTOR DEFINITIONS *** //
 
 BatchNormFullPrecLayer::BatchNormFullPrecLayer(const char* name,

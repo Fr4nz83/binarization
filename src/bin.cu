@@ -11,7 +11,6 @@
 #include "generator.h"
 #include "cnpy.h"
 
-#include "my_layers.cuh"
 #include "unit_test.cuh"
 
 

@@ -1,6 +1,131 @@
-/*
- * This file contains the definitions of the methods of the class ConvLayer.
+#pragma once
+
+
+#include "layer.cuh"
+#include <cudnn.h>
+
+
+/** @brief This class implements a full-precision convolutional layer based on cuDNN.
+ *
+ *  @note The implementation assumes that a dataset of images follows the NCHW format, while the set filters follows the HWIO format.
  */
+class ConvLayer : public Layer
+{
+protected:
+
+	// *** FIELDS *** //
+
+	// Input
+	float* input_gpu;
+	unsigned input_width;
+	unsigned input_height;
+	unsigned input_channels;
+
+	// Filters
+	float* filter_gpu;
+	unsigned filter_width;
+	unsigned filter_height;
+	unsigned filter_channels;
+
+	// Output
+	float* output_gpu;
+	unsigned output_width;
+	unsigned output_height;
+	unsigned output_channels;
+
+	// Convolution general properties.
+	bool same_conv;
+	unsigned size_batch;
+	unsigned stride_vertical;
+	unsigned stride_horizontal;
+	unsigned pad_h;
+	unsigned pad_w;
+
+	// Skip connections.
+	bool save_residual;
+	float *save_residual_gpu;
+
+	// cuDNN data structures.
+	cudnnHandle_t cudnn;
+	cudnnTensorDescriptor_t input_descriptor;
+	cudnnTensorDescriptor_t output_descriptor;
+    cudnnFilterDescriptor_t kernel_descriptor;
+    cudnnConvolutionDescriptor_t convolution_descriptor;
+    cudnnConvolutionFwdAlgo_t convolution_algorithm;
+    size_t workspace_bytes;
+    void *d_workspace;
+
+	// ID layer.
+	char name[8];
+
+
+
+	// *** PROTECTED METHODS *** //
+
+	bool initialize_cuDNN();
+	bool initialize_filters(const float* filters);
+
+
+
+public:
+
+	// *** PUBLIC CTORS / DTOR *** //
+
+	ConvLayer(const char* name,
+              unsigned input_height,
+			  unsigned input_width,
+			  unsigned filter_height,
+			  unsigned filter_width,
+			  unsigned input_channels,
+			  unsigned output_channels,
+			  const float* filters,
+			  unsigned stride_vertical = 1,
+			  unsigned stride_horizontal = 1,
+			  unsigned pad_h = 0,
+			  unsigned pad_w = 0,
+			  bool same_conv = true,
+			  bool save_residual = true);
+	virtual ~ConvLayer() {this->release();}
+
+
+
+	// *** PUBLIC METHODS *** //
+
+	inline virtual void release();
+	inline virtual ConvLayer* ready();
+
+	inline virtual int get_size_batch() {return this->size_batch;}
+
+	inline virtual int input_size() {return this->input_channels*this->input_height*this->input_width*this->size_batch;}
+	inline virtual int input_bytes() {return input_size() * sizeof(float);}
+	inline virtual int get_input_width() {return this->input_width;}
+	inline virtual int get_input_heigth() {return this->input_height;}
+	inline virtual int get_input_channels() {return this->input_channels;}
+
+	inline virtual int output_size() {return this->output_channels * this->output_height * this->output_width * this->size_batch;}
+	inline virtual int output_bytes() {return this->output_size() * sizeof(float);}
+	inline virtual int get_output_width() {return this->output_width;}
+	inline virtual int get_output_height() {return this->output_height;}
+	inline virtual int get_output_channels() {return this->output_channels;}
+
+	inline virtual void allocate_output_gpu();
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu);
+
+	inline virtual void* get_output_gpu() {auto tmp = this->output_gpu; this->output_gpu = NULL; return tmp;}
+	inline virtual void download_output_gpu(void* output);
+
+	inline virtual void execute_layer();
+
+	// Filter-related methods.
+	inline int filter_size() {return this->output_channels * this->input_channels * this->filter_height * this->filter_width;}
+	inline int filter_bytes() {return this->filter_size() * sizeof(float);}
+
+	// Residual-related methods.
+	inline float* get_residual_gpu(){auto tmp = this->save_residual_gpu; this->save_residual_gpu = NULL; return tmp;}
+	inline void download_residual_gpu(float* residual);
+};
+
 
 
 // *** PROTECTED METHODS DEFINITIONS *** //
