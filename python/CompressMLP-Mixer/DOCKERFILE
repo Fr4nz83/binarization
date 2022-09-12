@@ -1,0 +1,10 @@
+FROM nvcr.io/nvidia/pytorch:20.10-py3
+RUN apt-get update && \
+          apt-get -y install sudo
+#RUN sudo apt-get install python3.8
+RUN python -m ensurepip --upgrade
+#COPY . /code/ # USE THIS COMMAND TO COPY YOUR FILES, -y OPTION IN DOCKER RUN IS NOT WORKING
+RUN useradd -u 1004 -m francomarianardini
+RUN useradd -u 1003 -m salvatoretrani
+#USER francomarianardini
+RUN pip install ml_collections numpy scipy pandas torchsummary progress
