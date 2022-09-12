@@ -13,6 +13,19 @@
 #define FEIL(X) ((((X) + BITWIDTH - 1) >> LOG_BITWIDTH) << LOG_BITWIDTH) // Equivalente a ceil(X/32)*32 (ovvero, il multiplo di 32 >= X)
 
 
+float* gen_matrix_ptr(const uint32_t& rows, const uint32_t& cols)
+{
+	std::random_device rd;  //Will be used to obtain a seed for the random number engine
+	std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+	std::uniform_real_distribution<> float_dist(-5, 5);
+
+	const uint32_t size = rows * cols;
+	float* vec = new float[size];
+	for(uint32_t i = 0; i < size; i++)
+		vec[i] = (float) float_dist(gen);
+
+	return vec;
+}
 
 std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols)
 {

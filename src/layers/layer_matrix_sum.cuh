@@ -30,6 +30,17 @@ protected:
 
 public:
 
+	// *** PUBLIC TYPES *** //
+
+	typedef struct SumLayerParams
+	{
+		const char* name;
+		const unsigned data_width;
+		const unsigned data_height;
+	} SumLayerParams;
+
+
+
 	// *** PUBLIC CTORS/DTOR *** //
 
 	MatrixSumLayer(const char* name,

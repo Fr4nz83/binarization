@@ -38,6 +38,20 @@ protected:
 
 public:
 
+	// *** PUBLIC TYPES *** //
+
+	typedef struct BatchNormLayerParams
+	{
+		const char* name;
+		const unsigned& in_width;
+		const unsigned& in_height;
+		const unsigned& in_channels;
+		const float* scale;
+		const float* shift;
+	} BatchNormLayerParams;
+
+
+
 	// *** PUBLIC CTORS/DTOR *** //
 
 	BatchNormFullPrecLayer(const char* name,

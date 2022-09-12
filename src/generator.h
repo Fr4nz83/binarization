@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 
+float* gen_matrix_ptr(const uint32_t& rows, const uint32_t& cols);
 std::vector<float> gen_matrix(const uint32_t& rows, const uint32_t& cols);
 std::vector<float> gen_matrix(const uint32_t& batch, const uint32_t& rows, const uint32_t& cols);
 

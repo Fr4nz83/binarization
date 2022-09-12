@@ -33,9 +33,6 @@ protected:
 
 	// Output fields.
 	float* output_gpu;			// Memory allocated for FP output.
-	unsigned output_height;
-	unsigned output_width;
-	unsigned output_channels;
 
 
 	// Residuals used within the MLP-Mixer block.
@@ -55,24 +52,18 @@ protected:
 	TransposeFullPrecLayer* tr_layer; // NOTE: This layer is potentially used twice in the MLP-Mixer block.
 	MatrixSumLayer* sum_layer; // NOTE: This layer is potentially used twice in the MLP-Mixer block.
 
+	char name[8];
 
 
 public:
 
-	// *** PUBLIC TYPES *** //
-
-
-
 	// *** PUBLIC CTORS / DTOR *** //
 
-	// TODO: da implementare.
 	MLPMixer(const char* name,
-			 const unsigned& in_height,
-			 const unsigned& in_width,
-			 const unsigned& in_channels,
-			 const unsigned& out_width,
-			 const unsigned& out_height,
-			 const unsigned& out_channels);
+			 const unsigned& size_batch,
+			 const unsigned& width,
+			 const unsigned& channels,
+			 const BatchNormFullPrecLayer::BatchNormLayerParams params_bn1);
 	virtual ~MLPMixer(){this->release();};
 
 
@@ -114,32 +105,39 @@ public:
 
 MLPMixer::MLPMixer(const char* name,
 				   const unsigned& size_batch,
-				   const unsigned& in_height,
-				   const unsigned& in_width,
-				   const unsigned& in_channels,
-				   const unsigned& out_width,
-				   const unsigned& out_height) :
+				   const unsigned& width,
+				   const unsigned& channels,
+				   const BatchNormFullPrecLayer::BatchNormLayerParams params_bn1) :
 
 input_size_batch(size_batch),
-input_gpu(0),
-input_height(in_height),
-input_width(in_width),
-input_channels(in_channels),
-output_gpu(0),
-output_height(out_height),
-output_width(out_width),
-output_channels(in_channels)
+input_gpu(NULL),
+input_height(1),
+input_width(width),
+input_channels(channels),
+output_gpu(NULL),
+gpu_residuals_1(NULL),
+gpu_residuals_2(NULL)
 {
+	strncpy(this->name, name, 8);
+
+
 	// *** Layers allocation *** //
 
-	this->tr_layer = new TransposeFullPrecLayer("tr",
+	this->bn1_layer = new BatchNormFullPrecLayer(params_bn1.name,
+												 params_bn1.in_width,
+												 params_bn1.in_height,
+												 params_bn1.in_channels,
+												 params_bn1.scale,
+												 params_bn1.shift);
+
+	/*this->tr_layer = new TransposeFullPrecLayer("tr",
 											    this->input_width,
 											    this->input_height,
-												this->input_channels);
+												this->input_channels);*/
 
-	this->sum_layer = new MatrixSumLayer("sum",
+	/*this->sum_layer = new MatrixSumLayer("sum",
 										 this->input_width,
-										 this->input_height * this->input_channels);
+										 this->input_height * this->input_channels);*/
 }
 
 void MLPMixer::release()

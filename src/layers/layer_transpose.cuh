@@ -32,6 +32,18 @@ protected:
 
 public:
 
+	// *** PUBLIC TYPES *** //
+
+	typedef struct TransposeLayerParams
+	{
+		const char* name;
+		const unsigned data_width;
+		const unsigned data_height;
+		const unsigned data_channels;
+	} TransposeLayerParams;
+
+
+
 	// *** PUBLIC CTORS/DTOR *** //
 
 	TransposeFullPrecLayer(const char* name,

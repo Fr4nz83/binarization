@@ -12,6 +12,7 @@
 #include "cnpy.h"
 
 #include "unit_test.cuh"
+#include "unit_test_mixer.cuh"
 
 
 
@@ -37,8 +38,11 @@ int main()
 	// test_bin_multi_bin_input();
 	// test_bin_multi_bin_out();
 
-	test_sum_layer();
-	std::cout << "Test units executed!" << std::endl;
+	// test_sum_layer();
+
+
+	std::cout << "Execute MLP-Mixer test units!" << std::endl;
+	test_mlp_mixer();
 
 
 	return 0;
