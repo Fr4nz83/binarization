@@ -61,9 +61,10 @@ public:
 
 	MLPMixer(const char* name,
 			 const unsigned& size_batch,
-			 const unsigned& width,
-			 const unsigned& channels,
-			 const BatchNormFullPrecLayer::BatchNormLayerParams params_bn1);
+			 const unsigned& data_width,
+			 const unsigned& data_channels,
+			 const BatchNormFullPrecLayer::BatchNormLayerParams& params_bn1);
+
 	virtual ~MLPMixer(){this->release();};
 
 
@@ -111,7 +112,7 @@ MLPMixer::MLPMixer(const char* name,
 
 input_size_batch(size_batch),
 input_gpu(NULL),
-input_height(1),
+input_height(0),
 input_width(width),
 input_channels(channels),
 output_gpu(NULL),
