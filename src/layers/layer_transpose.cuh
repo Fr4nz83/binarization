@@ -50,6 +50,8 @@ public:
 						   const unsigned& data_width,
 						   const unsigned& data_height,
 						   const unsigned& data_channels);
+	TransposeFullPrecLayer(const TransposeLayerParams& params);
+
 	virtual ~TransposeFullPrecLayer(){this->release();};
 
 
@@ -106,6 +108,13 @@ gpu(NULL)
 	strncpy(this->name, name, 8);
 	std::cout << "Invoking constructor for " << this->name << std::endl;
 }
+
+TransposeFullPrecLayer::TransposeFullPrecLayer(const TransposeLayerParams& params) :
+TransposeFullPrecLayer(params.name,
+					   params.data_width,
+					   params.data_height,
+					   params.data_channels)
+{}
 
 
 

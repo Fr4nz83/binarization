@@ -60,6 +60,8 @@ public:
 						   const unsigned& in_channels,
 						   const float* scale,
 						   const float* shift);
+	BatchNormFullPrecLayer(const BatchNormLayerParams& params);
+
 	virtual ~BatchNormFullPrecLayer() {this->release();};
 
 
@@ -125,6 +127,15 @@ gpu(NULL)
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->shift_gpu), data_channels * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpy(this->shift_gpu, shift, data_channels * sizeof(float), cudaMemcpyHostToDevice));
 }
+
+BatchNormFullPrecLayer::BatchNormFullPrecLayer(const BatchNormLayerParams& params) :
+BatchNormFullPrecLayer(params.name,
+					   params.in_width,
+					   params.in_height,
+					   params.in_channels,
+					   params.scale,
+					   params.shift)
+{}
 
 
 

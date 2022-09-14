@@ -70,6 +70,10 @@ public:
 		const unsigned weights_height;
 		const float* weights;
 		const float* bias;
+		const bool binarized_input;
+		const bool binarize_output;
+		const bool transpose_output;
+		const bool apply_gelu;
 	} BinMultLayerParams;
 
 
@@ -85,6 +89,7 @@ public:
 							  const bool& binarized_output = false,
 							  const bool& transpose_output = false,
 							  const bool& apply_gelu = true);
+	BinaryMultiplicationLayer(const BinMultLayerParams& params);
 
 	virtual ~BinaryMultiplicationLayer(){this->release();};
 
@@ -226,6 +231,18 @@ apply_gelu(apply_gelu)
 	// Load and binarize the weights on GPU.
 	this->init_bin_weights(weights, bias);
 }
+
+BinaryMultiplicationLayer::BinaryMultiplicationLayer(const BinMultLayerParams& params) :
+BinaryMultiplicationLayer(params.name,
+						  params.weights_height,
+						  params.weights_width,
+						  params.weights,
+						  params.bias,
+						  params.binarized_input,
+						  params.binarize_output,
+						  params.transpose_output,
+						  params.apply_gelu)
+{}
 
 
 

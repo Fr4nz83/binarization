@@ -46,6 +46,8 @@ public:
 	MatrixSumLayer(const char* name,
 			  	   const unsigned& data_width,
 				   const unsigned& data_height);
+	MatrixSumLayer(const SumLayerParams& params);
+
 	virtual ~MatrixSumLayer(){this->release();};
 
 
@@ -100,6 +102,12 @@ gpu(NULL)
 	strncpy(this->name, name, 8);
 	std::cout << "Invoking constructor for " << this->name << std::endl;
 }
+
+MatrixSumLayer::MatrixSumLayer(const SumLayerParams& params) :
+MatrixSumLayer(params.name,
+			   params.data_width,
+			   params.data_height)
+{}
 
 
 
