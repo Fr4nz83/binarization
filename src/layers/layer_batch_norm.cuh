@@ -117,7 +117,6 @@ input_channels(data_channels),
 gpu(NULL)
 {
 	strncpy(this->name, name, 8);
-	std::cout << "Invoking constructor for " << this->name << std::endl;
 
 	// Load the scaling scalars (1 per channel) into the GPU.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->scale_gpu), data_channels * sizeof(float)));
@@ -126,6 +125,8 @@ gpu(NULL)
 	// Load the shift scalars (1 per channel) into the GPU.
 	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->shift_gpu), data_channels * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpy(this->shift_gpu, shift, data_channels * sizeof(float), cudaMemcpyHostToDevice));
+
+	std::cout << "Layer " << this->name << " initialized!" << std::endl;
 }
 
 BatchNormFullPrecLayer::BatchNormFullPrecLayer(const BatchNormLayerParams& params) :
@@ -143,7 +144,7 @@ BatchNormFullPrecLayer(params.name,
 
 void BatchNormFullPrecLayer::release()
 {
-	std::cout << "Dealloc CUDA resources..." << std::endl;
+	std::cout << "Layer " << this->name << ": Dealloc instance / CUDA resources..." << std::endl;
 
 
 	this->size_batch = 0;

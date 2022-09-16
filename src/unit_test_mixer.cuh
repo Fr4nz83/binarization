@@ -44,23 +44,26 @@ int test_mlp_mixer()
 			  	  	   image_width = 32,
 					   image_channels = 3;
 
-	auto mat1 = gen_matrix(size_batch * image_channels, image_height, image_width); // Generate input matrix according to the NCHW format.
-	float* img1_data = mat1.data();
-	std::cout << "Size input: " << mat1.size() * sizeof(float) << " bytes" << std::endl;
+	auto mat = gen_matrix(size_batch * image_channels, image_height, image_width); // Generate input matrix according to the NCHW format.
+	float* img_data = mat.data();
+	std::cout << "Size input: " << mat.size() * sizeof(float) << " bytes" << std::endl;
 
 
 
-	//=============== Set up  layer =================
+	//=============== Set up the layers to be used within the MLP-Mixer block =================
 
-	// Generate the parameters of the layers within the MLP-Mixer block...
-
-
-	// Instantiate the MLP-Mixer block...
-	// MLPMixer mlp_mixer("mlpm_1", ...);
+	// Generate the parameters to be used for the first batch-norm layer...
+	auto bn1 = generate_random_bn("bn_1", image_width, image_height, image_channels);
 
 
+	//=============== Set up the MLP-Mixer block =================
 
-	//=============== Layer execution =================
+	MLPMixer mlp_mixer("mlpmix_1", image_height, image_width, image_channels,
+					   bn1);
+
+
+
+	//=============== MLP-Mixer execution =================
 
 	// CUDA variables needed to measure the time the various operations take.
 	cudaEvent_t start, end_load, stop;
@@ -69,13 +72,13 @@ int test_mlp_mixer()
 
 	// 1 - Load input data from CPU to GPU and allocate space for the output.
 	cudaEventRecord(start);
-	//sum_l1.load_input_gpu(img1_data, img2_data);
+	mlp_mixer.load_input_gpu(size_batch, {img_data});
 	cudaEventRecord(end_load);
 
 
 	// 2 - MLP-mixer block execution.
 	// NOTE: we allocate 32 threads (1 warp) per block.
-	//sum_l1.execute_layer();
+	mlp_mixer.execute_layer();
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
 

@@ -60,7 +60,7 @@ public:
 	// *** PUBLIC CTORS / DTOR *** //
 
 	MLPMixer(const char* name,
-			 const unsigned& size_batch,
+			 const unsigned& data_height,
 			 const unsigned& data_width,
 			 const unsigned& data_channels,
 			 const BatchNormFullPrecLayer::BatchNormLayerParams& params_bn1);
@@ -89,13 +89,16 @@ public:
 	inline virtual int get_output_channels() {return this->get_input_channels();};
 	inline virtual int get_output_size_batch() {return this->get_size_batch();};
 
-	// TODO: da implementare.
 	inline virtual void allocate_output_gpu() {};
-	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input) {};
-	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu) {};
+	inline virtual void load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input);
+	inline virtual void set_input_gpu(const unsigned& size_batch, const std::vector<void*>& input_gpu)
+	{
+		this->input_size_batch = size_batch;
+		this->input_gpu = static_cast<float*>(input_gpu[0]);
+	};
 
 	// TODO: da implementare.
-	inline virtual void* get_output_gpu() {return 0;};
+	inline virtual void* get_output_gpu() {auto tmp = this->input_gpu; this->input_gpu = NULL; return tmp;};
 	inline virtual void download_output_gpu(void* output) {};
 
 	// TODO: da implementare.
@@ -104,32 +107,27 @@ public:
 
 
 
-MLPMixer::MLPMixer(const char* name,
-				   const unsigned& size_batch,
-				   const unsigned& width,
-				   const unsigned& channels,
-				   const BatchNormFullPrecLayer::BatchNormLayerParams params_bn1) :
+// *** PUBLIC CTORS DEFINITIONS *** //
 
-input_size_batch(size_batch),
+MLPMixer::MLPMixer(const char* name,
+				   const unsigned& data_height,
+				   const unsigned& data_width,
+				   const unsigned& data_channels,
+				   const BatchNormFullPrecLayer::BatchNormLayerParams& params_bn1) :
+
+input_size_batch(0),
 input_gpu(NULL),
-input_height(0),
-input_width(width),
-input_channels(channels),
+input_height(data_height),
+input_width(data_width),
+input_channels(data_channels),
 output_gpu(NULL),
 gpu_residuals_1(NULL),
-gpu_residuals_2(NULL)
+gpu_residuals_2(NULL),
+
+// *** Layers allocation *** //
+bn1_layer(new BatchNormFullPrecLayer(params_bn1))
 {
 	strncpy(this->name, name, 8);
-
-
-	// *** Layers allocation *** //
-
-	this->bn1_layer = new BatchNormFullPrecLayer(params_bn1.name,
-												 params_bn1.in_width,
-												 params_bn1.in_height,
-												 params_bn1.in_channels,
-												 params_bn1.scale,
-												 params_bn1.shift);
 
 	/*this->tr_layer = new TransposeFullPrecLayer("tr",
 											    this->input_width,
@@ -139,11 +137,17 @@ gpu_residuals_2(NULL)
 	/*this->sum_layer = new MatrixSumLayer("sum",
 										 this->input_width,
 										 this->input_height * this->input_channels);*/
+
+	std::cout << "Layer " << this->name << " initialized!" << std::endl;
 }
+
+
+
+// *** PUBLIC METHODS DEFINITIONS *** //
 
 void MLPMixer::release()
 {
-	std::cout << "Dealloc instance / CUDA resources..." << std::endl;
+	std::cout << "Layer " << this->name << ": Dealloc instance / CUDA resources..." << std::endl;
 
 
 	// Dealloc data space (may be NULL in case this layer is connected to other layers).
@@ -164,7 +168,7 @@ void MLPMixer::release()
 	if(this->bn1_layer != NULL)
 		delete this->bn1_layer;
 
-	if(this->bn2_layer != NULL)
+	/*if(this->bn2_layer != NULL)
 		delete this->bn2_layer;
 
 	if(this->bmm1_layer != NULL)
@@ -183,7 +187,7 @@ void MLPMixer::release()
 		delete this->tr_layer;
 
 	if(this->sum_layer != NULL)
-		delete this->sum_layer;
+		delete this->sum_layer;*/
 }
 
 MLPMixer* MLPMixer::ready()
@@ -222,6 +226,16 @@ MLPMixer* MLPMixer::ready()
 
 	// Return the pointer to the shadow copy (to be used within a kernel).
 	return this;
+}
+
+void MLPMixer::load_input_gpu(const unsigned& size_batch, const std::vector<void*>& input)
+{
+	this->input_size_batch = size_batch;
+
+	CUDA_SAFE_CALL(cudaMalloc((void**)&(this->input_gpu), this->input_bytes()));
+	CUDA_SAFE_CALL(cudaMemcpy(this->input_gpu, input[0], this->input_bytes(), cudaMemcpyHostToDevice));
+
+	this->allocate_output_gpu();
 }
 
 void MLPMixer::execute_layer()
